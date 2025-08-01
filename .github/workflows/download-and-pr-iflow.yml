@@ -16,9 +16,6 @@ jobs:
       pull-requests: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -47,6 +44,12 @@ jobs:
           
           # Clean up by removing the original .zip file
           rm "$ZIP_FILE"
+      - name: Clean up Piper Binary
+        run: |
+          echo "Searching for and removing Piper binary directory..."
+          rm -rf v*
+          echo "Cleanup complete."
+          
       - name: Create Pull Request
         id: create_pr
         uses: peter-evans/create-pull-request@v6
