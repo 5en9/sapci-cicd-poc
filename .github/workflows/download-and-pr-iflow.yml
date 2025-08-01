@@ -7,10 +7,11 @@ on:
         description: 'The technical ID of the iFlow to download'
         required: true
         type: string
-      package_id:
-        description: 'The technical ID of the Integration Package'
+      version:
+        description: 'Version of iflow'
         required: true
         type: string
+        
 
 jobs:
   download_and_create_pr:
@@ -35,6 +36,7 @@ jobs:
           flags:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
             --integrationFlowId ${{ github.event.inputs.iflow_id }}
+            --version ${{github.event.inputs.version}}
             --downloadPath src/main/resources/scenarios/integration/${{ github.event.inputs.iflow_id }}
       - name: Create Pull Request
         id: create_pr
