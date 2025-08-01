@@ -19,14 +19,11 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Determine iFlow Name from Filename
+      - name: Determine iFlow Name
         id: iflow_details
         run: |
-          WORKFLOW_PATH="${{ github.workflow }}"
-          FILENAME="${WORKFLOW_PATH##*/}"
-          WITHOUT_PREFIX="${FILENAME#promote }"
-          IFLOW_ID="${WITHOUT_PREFIX%}"
-          echo "Determined iFlow ID for artifact: $IFLOW_ID"
+          IFLOW_ID=$(echo "${{ github.workflow }}" | awk '{print $2}')
+          echo "Determined iFlow ID from workflow name: $IFLOW_ID"
           echo "id=$IFLOW_ID" >> "$GITHUB_OUTPUT"
 
       # ⬇️ 3. ARTIFACT now only contains the specific iFlow + global config ⬇️
