@@ -130,44 +130,57 @@ jobs:
           else
             echo "Reading parameter definitions from $PROPDEF_FILE"
             
-            # Extract parameter names from the XML file and loop through them.
-            grep -oP '<name>\K[^<]+' "$PROPDEF_FILE" | while IFS= read -r PARAM_NAME || [[ -n "$PARAM_NAME" ]];
-            do
-              echo "Processing parameter: '$PARAM_NAME'"
-              PARAM_VALUE=""
+            # Use process substitution (< <(...)) for the loop. This is more robust
+            # than a standard pipe, as it prevents commands inside the loop from
+            # accidentally consuming the input stream.
+            while IFS= read -r PARAM_NAME || [[ -n "$PARAM_NAME" ]]; do
+                echo "Processing parameter: '$PARAM_NAME'"
+                PARAM_VALUE=""
 
-              # 1. Check for iFlow-specific override
-              if [ -f "$IFLOW_CONFIG_FILE" ]; then
-                VALUE_LINE=$(grep "^${PARAM_NAME}=" "$IFLOW_CONFIG_FILE")
-                if [ -n "$VALUE_LINE" ]; then
-                  PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
-                  echo "  Found iFlow-specific value."
+                # 1. Check for iFlow-specific override
+                if [ -f "$IFLOW_CONFIG_FILE" ]; then
+                  VALUE_LINE=$(grep "^${PARAM_NAME}=" "$IFLOW_CONFIG_FILE")
+                  if [ -n "$VALUE_LINE" ]; then
+                    PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
+                    echo "  Found iFlow-specific value."
+                  fi
                 fi
-              fi
 
-              # 2. If not found, check for global value
-              if [ -z "$PARAM_VALUE" ] && [ -f "$GLOBAL_CONFIG_FILE" ]; then
-                VALUE_LINE=$(grep "^${PARAM_NAME}=" "$GLOBAL_CONFIG_FILE")
-                if [ -n "$VALUE_LINE" ]; then
-                  PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
-                  echo "  Found global value."
+                # 2. If not found, check for global value
+                if [ -z "$PARAM_VALUE" ] && [ -f "$GLOBAL_CONFIG_FILE" ]; then
+                  VALUE_LINE=$(grep "^${PARAM_NAME}=" "$GLOBAL_CONFIG_FILE")
+                  if [ -n "$VALUE_LINE" ]; then
+                    PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
+                    echo "  Found global value."
+                  fi
                 fi
-              fi
 
-              # 3. If a value was found, update the configuration
-              if [ -n "$PARAM_VALUE" ]; then
-                echo "  Updating iFlow with Key: '$PARAM_NAME'"
-                piper integrationArtifactUpdateConfiguration \
-                  --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
-                  --integrationFlowId "${{ matrix.iflow_id }}" \
-                  --integrationFlowVersion "active" \
-                  --parameterKey "$PARAM_NAME" \
-                  --parameterValue "$PARAM_VALUE" \
-                  --verbose false
-              else
-                echo "  No value found for '$PARAM_NAME' in property files. Skipping."
-              fi
-            done
+                # 3. If a value was found, update the configuration
+                if [ -n "$PARAM_VALUE" ]; then
+                  echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
+                  output=$(piper integrationArtifactUpdateConfiguration \
+                      --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
+                      --integrationFlowId "${{ matrix.iflow_id }}" \
+                      --integrationFlowVersion "active" \
+                      --parameterKey "$PARAM_NAME" \
+                      --parameterValue "$PARAM_VALUE" \
+                      --verbose true 2>&1)
+                  exit_code=$?
+
+                  echo "$output"
+
+                  if [ $exit_code -ne 0 ]; then
+                    if echo "$output" | grep -q -E "does not exist|not found for Integration Flow"; then
+                      echo "Warning: Parameter '$PARAM_NAME' not found on iFlow. This is expected for package-level parameters. Skipping."
+                    else
+                      echo "Error: A critical error occurred during parameter update. Failing the step."
+                      exit 1
+                    fi
+                  fi
+                else
+                  echo "  No value found for '$PARAM_NAME' in property files. Skipping."
+                fi
+            done < <(grep -oP '<name>\K[^<]+' "$PROPDEF_FILE")
           fi
           
           echo "Configuration updated. Now deploying the iFlow..."
