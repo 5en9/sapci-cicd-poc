@@ -31,18 +31,12 @@ jobs:
         id: download_iflow
         uses: SAP/project-piper-action@main
         with:
-          command: cloudIntegrationDownload
-          # --- BTP Credentials from GitHub Secrets ---
-          apiServiceKey: ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
-          
-          # --- iFlow details from manual input ---
-          integrationFlowId: ${{ github.event.inputs.iflow_id }}
-          packageId: ${{ github.event.inputs.package_id }}
-          
-          # --- Destination path for the downloaded content ---
-          # This ensures the iFlow is saved to the correct directory structure
-          downloadPath: src/main/resources/scenarios/integration/${{ github.event.inputs.iflow_id }}
-
+          step-name: cloudIntegrationDownload
+          flags:
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
+            --integrationFlowId ${{ github.event.inputs.iflow_id }}
+            --packageId ${{ github.event.inputs.package_id }}
+            --downloadPath src/main/resources/scenarios/integration/${{ github.event.inputs.iflow_id }}
       - name: Create Pull Request
         id: create_pr
         uses: peter-evans/create-pull-request@v6
