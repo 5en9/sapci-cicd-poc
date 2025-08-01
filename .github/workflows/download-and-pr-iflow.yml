@@ -33,11 +33,11 @@ jobs:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
             --integrationFlowId ${{ github.event.inputs.iflow_id }}
             --integrationFlowVersion active
-            --downloadPath ${{ github.event.inputs.iflow_id }}
+            --downloadPath iflows/${{ github.event.inputs.iflow_id }}
       - name: Unzip iFlow Artifact
         run: |
           IFLOW_ID=${{ github.event.inputs.iflow_id }}
-          TARGET_DIR="src/main/resources/scenarios/integration/$IFLOW_ID"
+          TARGET_DIR="iflows/$IFLOW_ID"
           ZIP_FILE="$TARGET_DIR/$IFLOW_ID.zip"
           
           echo "Unzipping $ZIP_FILE to $TARGET_DIR"
