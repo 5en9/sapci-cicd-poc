@@ -129,7 +129,7 @@
                 </ifl:property>
                 <ifl:property>
                     <key>xsrfProtection</key>
-                    <value>1</value>
+                    <value>0</value>
                 </ifl:property>
                 <ifl:property>
                     <key>TransportProtocol</key>
@@ -233,7 +233,7 @@
                 </ifl:property>
                 <ifl:property>
                     <key>wrapContent</key>
-                    <value>Bye</value>
+                    <value>Bye {{local_parameter}}, from {{package_parameter}}</value>
                 </ifl:property>
                 <ifl:property>
                     <key>componentVersion</key>
