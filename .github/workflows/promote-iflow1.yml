@@ -6,8 +6,8 @@ on:
     branches:
       - main
     paths:
-      # ⬇️ THIS PATH MUST BE MANUALLY SET FOR EACH IFLOW WORKFLOW ⬇️
-      - 'iflows/iflow1/**'
+      # ⬇️ THIS PATH MUST BE MANUALLY SET FOR EACH IFLOW WORKFLOW ⬇️  Disable trigger fornow
+      - 'disable/iflows/iflow1/**'
   workflow_dispatch:
 
 jobs:
