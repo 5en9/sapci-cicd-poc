@@ -35,7 +35,6 @@ jobs:
           flags:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
             --integrationFlowId ${{ github.event.inputs.iflow_id }}
-            --packageId ${{ github.event.inputs.package_id }}
             --downloadPath src/main/resources/scenarios/integration/${{ github.event.inputs.iflow_id }}
       - name: Create Pull Request
         id: create_pr
