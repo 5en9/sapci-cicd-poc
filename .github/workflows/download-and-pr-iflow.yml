@@ -33,7 +33,7 @@ jobs:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
             --integrationFlowId ${{ github.event.inputs.iflow_id }}
             --integrationFlowVersion active
-            --downloadPath src/main/resources/scenarios/integration/${{ github.event.inputs.iflow_id }}
+            --downloadPath ${{ github.event.inputs.iflow_id }}
       - name: Unzip iFlow Artifact
         run: |
           IFLOW_ID=${{ github.event.inputs.iflow_id }}
