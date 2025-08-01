@@ -35,9 +35,13 @@ jobs:
             config/
           retention-days: 7
 
-  deploy-env-d:
+  deploy_and_prep_config:
     name: 🧪 Deploy to D
+    id: deploy_prep # Add an ID to reference this job's outputs
     needs: build
+    outputs:
+      iflow_id: ${{ steps.iflow_details.outputs.id }}
+      config_matrix: ${{ steps.prep_matrix.outputs.matrix }}
     environment: d
     runs-on: ubuntu-latest
     steps:
@@ -45,18 +49,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: iflow-artifact-${{ github.run_id }}
-
-      - name: Download Piper binary
-        run: |
-          # Get the latest Piper release URL
-          PIPER_URL=$(curl -s https://api.github.com/repos/SAP/jenkins-library/releases/latest | jq -r '.assets[] | select(.name | contains("piper")) | .browser_download_url')
-          
-          # Download Piper
-          curl -L $PIPER_URL -o piper
-
-          # Make Piper executable
-          chmod +x piper
-
+  
       - name: Determine iFlow Name
         id: iflow_details
         run: |
@@ -81,25 +74,43 @@ jobs:
             --packageId package1
             --verbose true
 
-      - name: Update Configuration
+      - name: Prepare Configuration Matrix
+        id: prep_matrix
         run: |
-          echo "Reading parameters from parameters-d.prop and updating iFlow..."
-          
-          export PATH=$PATH:$(pwd)
-          # Filter out comments and empty lines
-          grep -v '^#' iflows/${{ steps.iflow_details.outputs.id }}/src/main/resources/parameters-d.prop | grep -v '^$' | while IFS= read -r line
-          do
-            KEY=$(echo "$line" | cut -d'=' -f1)
-            VALUE=$(echo "$line" | cut -d'=' -f2-)
-            
-            echo "Updating -> Key: $KEY, Value: $VALUE"
-            
-            # Execute the piper command for each key-value pair
-            piper integrationArtifactUpdateConfiguration \
-              --apiServiceKey "${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}" \
-              --integrationFlowId "${{ steps.iflow_details.outputs.id }}" \
-              --integrationFlowVersion "active" \
-              --parameterKey "$KEY" \
-              --parameterValue "$VALUE" \
-              --verbose true
-          done
+          CONFIG_FILE="iflows/${{ steps.iflow_details.outputs.id }}/src/main/resources/parameters-d.prop"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Configuration file not found: $CONFIG_FILE. Skipping parameter updates."
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # Read the properties file, filter comments/blanks, and convert to a JSON array for the matrix
+          JSON_MATRIX=$(grep -v '^#' "$CONFIG_FILE" | grep -v '^$' | jq -R 'split("=") | {key: .[0], value: .[1]}' | jq -s '.')
+          echo "Generated Matrix for configuration: $JSON_MATRIX"
+          echo "matrix=$JSON_MATRIX" >> $GITHUB_OUTPUT
+
+  update_configuration:
+    name: ⚙️ Configure iflow1 in D
+    needs: deploy_and_prep_config # Depends on the previous job
+    environment: d
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # This matrix is dynamically populated by the output of the 'deploy_and_prep_config' job
+        config: ${{ fromJSON(needs.deploy_and_prep_config.outputs.config_matrix) }}
+    
+    # Continue only if the matrix is not empty
+    if: ${{ fromJSON(needs.deploy_and_prep_config.outputs.config_matrix)[0] }}
+    
+    steps:
+      - name: Update ${{ matrix.config.key }}
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactUpdateConfiguration
+          flags:
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
+            --integrationFlowId ${{ needs.deploy_and_prep_config.outputs.iflow_id }}
+            --integrationFlowVersion "active"
+            --parameterKey ${{ matrix.config.key }}
+            --parameterValue ${{ matrix.config.value }}
+            --verbose true
