@@ -163,7 +163,7 @@ jobs:
                   --integrationFlowVersion "active" \
                   --parameterKey "$PARAM_NAME" \
                   --parameterValue "$PARAM_VALUE" \
-                  --verbose true
+                  --verbose false
               else
                 echo "  No value found for '$PARAM_NAME' in property files. Skipping."
               fi
