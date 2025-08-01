@@ -31,7 +31,7 @@ jobs:
         id: download_iflow
         uses: SAP/project-piper-action@main
         with:
-          step-name: cloudIntegrationDownload
+          step-name: integrationArtifactDownload
           flags:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
             --integrationFlowId ${{ github.event.inputs.iflow_id }}
