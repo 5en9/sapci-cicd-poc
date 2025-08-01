@@ -119,60 +119,57 @@ jobs:
 
       - name: Update Configuration
         run: |
+          # Define file paths
+          PROPDEF_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters.propdef"
           GLOBAL_CONFIG_FILE="config/parameters-${{ matrix.env.name }}.prop"
           IFLOW_CONFIG_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters-${{ matrix.env.name }}.prop"
 
-          # Function to apply parameters from a file
-          apply_config() {
-            local file_path=$1
-            local config_type=$2
-            grep -v '^#' "$file_path" | grep -v '^$' | while IFS= read -r line || [[ -n "$line" ]];
+          # Check if the definition file exists. If not, there are no parameters to configure.
+          if [ ! -f "$PROPDEF_FILE" ]; then
+            echo "Parameter definition file not found: $PROPDEF_FILE. Skipping configuration."
+          else
+            echo "Reading parameter definitions from $PROPDEF_FILE"
+            
+            # Extract parameter names from the XML file and loop through them.
+            grep -oP '<name>\K[^<]+' "$PROPDEF_FILE" | while IFS= read -r PARAM_NAME || [[ -n "$PARAM_NAME" ]];
             do
-              KEY=$(echo "$line" | cut -d'=' -f1)
-              VALUE=$(echo "$line" | cut -d'=' -f2-)
-              echo "Updating ${config_type} -> Key: $KEY"
+              echo "Processing parameter: '$PARAM_NAME'"
+              PARAM_VALUE=""
 
-              # Execute piper and capture all output (stdout and stderr) and the exit code.
-              output=$(piper integrationArtifactUpdateConfiguration \
+              # 1. Check for iFlow-specific override
+              if [ -f "$IFLOW_CONFIG_FILE" ]; then
+                VALUE_LINE=$(grep "^${PARAM_NAME}=" "$IFLOW_CONFIG_FILE")
+                if [ -n "$VALUE_LINE" ]; then
+                  PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
+                  echo "  Found iFlow-specific value."
+                fi
+              fi
+
+              # 2. If not found, check for global value
+              if [ -z "$PARAM_VALUE" ] && [ -f "$GLOBAL_CONFIG_FILE" ]; then
+                VALUE_LINE=$(grep "^${PARAM_NAME}=" "$GLOBAL_CONFIG_FILE")
+                if [ -n "$VALUE_LINE" ]; then
+                  PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
+                  echo "  Found global value."
+                fi
+              fi
+
+              # 3. If a value was found, update the configuration
+              if [ -n "$PARAM_VALUE" ]; then
+                echo "  Updating iFlow with Key: '$PARAM_NAME'"
+                piper integrationArtifactUpdateConfiguration \
                   --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
                   --integrationFlowId "${{ matrix.iflow_id }}" \
                   --integrationFlowVersion "active" \
-                  --parameterKey "$KEY" \
-                  --parameterValue "$VALUE" \
-                  --verbose true 2>&1)
-              exit_code=$?
-
-              echo "$output"
-
-              # If the command failed, check if it's the expected "parameter not found" error.
-              # If so, we issue a warning but continue. Otherwise, we fail the build.
-              if [ $exit_code -ne 0 ]; then
-                if echo "$output" | grep -q -E "does not exist|not found for Integration Flow"; then
-                  echo "Warning: Parameter '$KEY' not found on iFlow. Skipping update for this parameter."
-                else
-                  echo "Error: A critical error occurred during parameter update. Failing the step."
-                  exit 1
-                fi
+                  --parameterKey "$PARAM_NAME" \
+                  --parameterValue "$PARAM_VALUE" \
+                  --verbose true
+              else
+                echo "  No value found for '$PARAM_NAME' in property files. Skipping."
               fi
             done
-          }
-
-          # Apply global configuration if it exists
-          if [ -f "$GLOBAL_CONFIG_FILE" ]; then
-            echo "Applying global configuration from $GLOBAL_CONFIG_FILE..."
-            apply_config "$GLOBAL_CONFIG_FILE" "Global"
-          else
-            echo "Global configuration file not found, skipping."
           fi
-
-          # Apply iFlow-specific configuration if it exists (will override global)
-          if [ -f "$IFLOW_CONFIG_FILE" ]; then
-            echo "Applying iFlow-specific configuration from $IFLOW_CONFIG_FILE..."
-            apply_config "$IFLOW_CONFIG_FILE" "iFlow"
-          else
-            echo "iFlow-specific configuration file not found, skipping."
-          fi
-
+          
           echo "Configuration updated. Now deploying the iFlow..."
           piper integrationArtifactDeploy \
             --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
