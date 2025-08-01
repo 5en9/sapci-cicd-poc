@@ -12,7 +12,6 @@ on:
 
 jobs:
   build:
-    # ... (The build job remains unchanged)
     name: 📦 Build Artifact
     runs-on: ubuntu-latest
     steps:
@@ -39,6 +38,7 @@ jobs:
   deploy-env-d:
     name: 🧪 Deploy to D
     needs: build
+    environment: d
     runs-on: ubuntu-latest
     steps:
       - name: Download the deployable artifact
@@ -53,13 +53,6 @@ jobs:
           echo "Determined iFlow ID from workflow name: $IFLOW_ID"
           echo "id=$IFLOW_ID" >> "$GITHUB_OUTPUT"
       
-      - name: Prepare Parameter File for D
-        run: |
-          echo "Renaming parameters.prop.qa to parameters.prop"
-          cp iflows/${{ steps.iflow_details.outputs.id }}/src/main/resources/parameters-d.prop parameters.prop
-          echo "--- Content of parameters.prop ---"
-          cat parameters.prop
-
       - name: Create Zip Archive for D
         run: |
           cd iflows/${{ steps.iflow_details.outputs.id }}
@@ -76,3 +69,25 @@ jobs:
             --integrationFlowName ${{ steps.iflow_details.outputs.id }}
             --packageId package1
             --verbose true
+
+      - name: Update Configuration
+        run: |
+          echo "Reading parameters from parameters-d.prop and updating iFlow..."
+          
+          # Filter out comments and empty lines
+          grep -v '^#' parameters-d.prop | grep -v '^$' | while IFS= read -r line
+          do
+            KEY=$(echo "$line" | cut -d'=' -f1)
+            VALUE=$(echo "$line" | cut -d'=' -f2-)
+            
+            echo "Updating -> Key: $KEY, Value: $VALUE"
+            
+            # Execute the piper command for each key-value pair
+            piper integrationArtifactUpdateConfiguration \
+              --apiServiceKey "${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}" \
+              --integrationFlowId "${{ steps.iflow_details.outputs.id }}" \
+              --integrationFlowVersion "active" \
+              --parameterKey "$KEY" \
+              --parameterValue "$VALUE" \
+              --verbose true
+          done
