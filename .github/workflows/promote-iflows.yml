@@ -11,8 +11,8 @@ on:
   workflow_dispatch: # Allows manual runs
     inputs:
       iflow_id:
-        description: 'Optional: The ID of a specific iFlow to deploy. If empty, all iFlows will be deployed.'
-        required: false
+        description: 'Comma-separated list of iFlow IDs to deploy, or "all" to deploy all iFlows.'
+        required: true
         type: string
 
 jobs:
@@ -33,14 +33,14 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then # Manual trigger logic
             IFLOW_ID_INPUT="${{ github.event.inputs.iflow_id }}"
-            if [ -n "$IFLOW_ID_INPUT" ]; then
-              echo "Manual dispatch for a specific iFlow: $IFLOW_ID_INPUT"
-              # Create a JSON array with the single specified iFlow
-              CHANGED_IFLOWS=$(echo "[\"$IFLOW_ID_INPUT\"]")
-            else
-              echo "Manual dispatch for all iFlows (no specific iFlow ID provided)."
+            if [ "$IFLOW_ID_INPUT" == "all" ]; then
+              echo "Manual dispatch to deploy all iFlows."
               # List all directories under iflows/, get their base name, and format as JSON
               CHANGED_IFLOWS=$(ls -d iflows/*/ | xargs -n 1 basename | jq -R . | jq -sc .)
+            else
+              echo "Manual dispatch for specific iFlow(s): $IFLOW_ID_INPUT"
+              # Convert comma-separated string to a JSON array, removing whitespace
+              CHANGED_IFLOWS=$(echo "$IFLOW_ID_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc .)
             fi
           else
             echo "Push event detected, determining changed iFlows."
@@ -119,29 +119,44 @@ jobs:
 
       - name: Update Configuration
         run: |
-          CONFIG_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters-${{ matrix.env.name }}.prop"
-          if [ ! -f "$CONFIG_FILE" ]; then
-            echo "Configuration file not found: $CONFIG_FILE. Skipping parameter updates."
-            exit 0
+          GLOBAL_CONFIG_FILE="config/parameters-${{ matrix.env.name }}.prop"
+          IFLOW_CONFIG_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters-${{ matrix.env.name }}.prop"
+
+          # Function to apply parameters from a file
+          apply_config() {
+            local file_path=$1
+            local config_type=$2
+            grep -v '^#' "$file_path" | grep -v '^$' | while IFS= read -r line || [[ -n "$line" ]];
+            do
+              KEY=$(echo "$line" | cut -d'=' -f1)
+              VALUE=$(echo "$line" | cut -d'=' -f2-)
+              echo "Updating ${config_type} -> Key: $KEY"
+              
+              piper integrationArtifactUpdateConfiguration \
+                --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
+                --integrationFlowId "${{ matrix.iflow_id }}" \
+                --integrationFlowVersion "active" \
+                --parameterKey "$KEY" \
+                --parameterValue "$VALUE" \
+                --verbose true
+            done
+          }
+
+          # Apply global configuration if it exists
+          if [ -f "$GLOBAL_CONFIG_FILE" ]; then
+            echo "Applying global configuration from $GLOBAL_CONFIG_FILE..."
+            apply_config "$GLOBAL_CONFIG_FILE" "Global"
+          else
+            echo "Global configuration file not found, skipping."
           fi
-          
-          echo "Reading parameters from $CONFIG_FILE and updating iFlow..."
-          # A shell loop is used here as a trade-off to enable the environment matrix.
-          # This avoids the massive duplication of jobs from the previous workflow.
-          grep -v '^#' "$CONFIG_FILE" | grep -v '^$' | while IFS= read -r line || [[ -n "$line" ]];
-          do
-            KEY=$(echo "$line" | cut -d'=' -f1)
-            VALUE=$(echo "$line" | cut -d'=' -f2-)
-            echo "Updating -> Key: $KEY"
-            
-            piper integrationArtifactUpdateConfiguration \
-              --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
-              --integrationFlowId "${{ matrix.iflow_id }}" \
-              --integrationFlowVersion "active" \
-              --parameterKey "$KEY" \
-              --parameterValue "$VALUE" \
-              --verbose true
-          done
+
+          # Apply iFlow-specific configuration if it exists (will override global)
+          if [ -f "$IFLOW_CONFIG_FILE" ]; then
+            echo "Applying iFlow-specific configuration from $IFLOW_CONFIG_FILE..."
+            apply_config "$IFLOW_CONFIG_FILE" "iFlow"
+          else
+            echo "iFlow-specific configuration file not found, skipping."
+          fi
 
           echo "Configuration updated. Now deploying the iFlow..."
           piper integrationArtifactDeploy \
