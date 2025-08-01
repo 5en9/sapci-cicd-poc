@@ -113,7 +113,7 @@ jobs:
           flags:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
             --integrationFlowId ${{ needs.deploy_and_prep_config.outputs.iflow_id }}
-            --integrationFlowVersion "active"
+            --integrationFlowVersion active
             --parameterKey ${{ matrix.config.key }}
             --parameterValue ${{ matrix.config.value }}
             --verbose true
