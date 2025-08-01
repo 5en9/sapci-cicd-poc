@@ -58,7 +58,8 @@ jobs:
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
           git checkout -b "sync/iflow-${{ github.event.inputs.iflow_id }}"
+          
           git add .
           git commit -m "feat: Sync iFlow ${{ github.event.inputs.iflow_id }}"
-          git push origin "sync/iflow-${{ github.event.inputs.iflow_id }}"
+          git push origin "sync/iflow-${{ github.event.inputs.iflow_id }}" --force
           
