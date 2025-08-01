@@ -75,7 +75,7 @@ jobs:
           echo "Reading parameters from parameters-d.prop and updating iFlow..."
           
           # Filter out comments and empty lines
-          grep -v '^#' parameters-d.prop | grep -v '^$' | while IFS= read -r line
+          grep -v '^#' iflows/${{ steps.iflow_details.outputs.id }}/src/main/resources/parameters-d.prop | grep -v '^$' | while IFS= read -r line
           do
             KEY=$(echo "$line" | cut -d'=' -f1)
             VALUE=$(echo "$line" | cut -d'=' -f2-)
