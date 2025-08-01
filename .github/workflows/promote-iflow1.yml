@@ -1,0 +1,67 @@
+# Name this workflow descriptively
+name: Promote iflow1
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # ⬇️ THIS PATH MUST BE MANUALLY SET FOR EACH IFLOW WORKFLOW ⬇️
+      - 'src/main/resources/scenarios/integration/iflow1/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    # ... (The build job remains unchanged)
+    name: 📦 Build Artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Archive iFlow and Configs into an Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iflow-artifact-${{ github.run_id }}
+          path: |
+            src/
+            config/
+          retention-days: 30
+
+  deploy-qa:
+    name: 🧪 Deploy to QA
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the deployable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: iflow-artifact-${{ github.run_id }}
+
+      # This step IS dynamic and works correctly
+      - name: Determine iFlow Name from Filename
+        id: iflow_details
+        run: |
+          IFLOW_ID=$(basename ${{ github.workflow_path }} | sed -e 's/^promote-//' -e 's/\.yml$//')
+          echo "Determined iFlow ID: $IFLOW_ID"
+          echo "id=$IFLOW_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'sapmachine'
+          java-version: '17'
+      
+      - name: Deploy to QA
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactUpload
+          flags:
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
+
+
+          source: ./src/main/resources/scenarios/integration/${{ steps.iflow_details.outputs.id }}
+          packageId: 'YourIntegrationPackageID'
+          integrationFlowId: ${{ steps.iflow_details.outputs.id }}
+          externalConfiguration: config/qa.properties
+
