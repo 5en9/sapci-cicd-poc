@@ -121,7 +121,7 @@ jobs:
 
   deploy:
     name: deploy iflow in D
-    needs: update_configuration
+    needs: [upload_and_prep_config, update_configuration]
     environment: d
     runs-on: ubuntu-latest
     steps:
