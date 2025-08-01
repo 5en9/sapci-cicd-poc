@@ -131,14 +131,29 @@ jobs:
               KEY=$(echo "$line" | cut -d'=' -f1)
               VALUE=$(echo "$line" | cut -d'=' -f2-)
               echo "Updating ${config_type} -> Key: $KEY"
-              
-              piper integrationArtifactUpdateConfiguration \
-                --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
-                --integrationFlowId "${{ matrix.iflow_id }}" \
-                --integrationFlowVersion "active" \
-                --parameterKey "$KEY" \
-                --parameterValue "$VALUE" \
-                --verbose true
+
+              # Execute piper and capture all output (stdout and stderr) and the exit code.
+              output=$(piper integrationArtifactUpdateConfiguration \
+                  --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
+                  --integrationFlowId "${{ matrix.iflow_id }}" \
+                  --integrationFlowVersion "active" \
+                  --parameterKey "$KEY" \
+                  --parameterValue "$VALUE" \
+                  --verbose true 2>&1)
+              exit_code=$?
+
+              echo "$output"
+
+              # If the command failed, check if it's the expected "parameter not found" error.
+              # If so, we issue a warning but continue. Otherwise, we fail the build.
+              if [ $exit_code -ne 0 ]; then
+                if echo "$output" | grep -q -E "does not exist|not found for Integration Flow"; then
+                  echo "Warning: Parameter '$KEY' not found on iFlow. Skipping update for this parameter."
+                else
+                  echo "Error: A critical error occurred during parameter update. Failing the step."
+                  exit 1
+                fi
+              fi
             done
           }
 
