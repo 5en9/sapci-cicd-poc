@@ -139,22 +139,26 @@ jobs:
 
                 # 1. Check for iFlow-specific override
                 if [ -f "$IFLOW_CONFIG_FILE" ]; then
+                  echo "1"
                   VALUE_LINE=$(grep "^${PARAM_NAME}=" "$IFLOW_CONFIG_FILE")
                   if [ -n "$VALUE_LINE" ]; then
+                    echo "2"
                     PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
                     echo "  Found iFlow-specific value."
                   fi
                 fi
-
+                echo "3"
                 # 2. If not found, check for global value
                 if [ -z "$PARAM_VALUE" ] && [ -f "$GLOBAL_CONFIG_FILE" ]; then
+                  echo "4"
                   VALUE_LINE=$(grep "^${PARAM_NAME}=" "$GLOBAL_CONFIG_FILE")
                   if [ -n "$VALUE_LINE" ]; then
+                    echo "5"  
                     PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
                     echo "  Found global value."
                   fi
                 fi
-
+                echo "6"
                 # 3. If a value was found, update the configuration
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
