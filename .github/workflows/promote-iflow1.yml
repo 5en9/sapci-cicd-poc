@@ -35,7 +35,7 @@ jobs:
             config/
           retention-days: 7
 
-  deploy_and_prep_config:
+  upload_and_prep_config:
     name: 🧪 Deploy to D
     needs: build
     outputs:
@@ -92,18 +92,18 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   update_configuration:
-    name: ⚙️ Configure iflow1 in D
-    needs: deploy_and_prep_config # Depends on the previous job
+    name: ⚙️ Configure iflow in D
+    needs: upload_and_prep_config # Depends on the previous job
     environment: d
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # This matrix is dynamically populated by the output of the 'deploy_and_prep_config' job
-        config: ${{ fromJSON(needs.deploy_and_prep_config.outputs.config_matrix) }}
+        # This matrix is dynamically populated by the output of the 'upload_and_prep_config' job - Limit to 256 jobs
+        config: ${{ fromJSON(needs.upload_and_prep_config.outputs.config_matrix) }}
     
     # Continue only if the matrix is not empty
-    if: ${{ fromJSON(needs.deploy_and_prep_config.outputs.config_matrix)[0] }}
+    if: ${{ fromJSON(needs.upload_and_prep_config.outputs.config_matrix)[0] }}
     
     steps:
       - name: Update ${{ matrix.config.key }}
@@ -112,8 +112,25 @@ jobs:
           step-name: integrationArtifactUpdateConfiguration
           flags:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
-            --integrationFlowId ${{ needs.deploy_and_prep_config.outputs.iflow_id }}
+            --integrationFlowId ${{ needs.upload_and_prep_config.outputs.iflow_id }}
             --integrationFlowVersion active
             --parameterKey ${{ matrix.config.key }}
             --parameterValue ${{ matrix.config.value }}
             --verbose true
+# deploy iflow using project-piper-action with step-name: integrationArtifactDeploy
+
+  deploy:
+    name: deploy iflow in D
+    needs: update_configuration
+    environment: d
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactDeploy
+          flags:
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
+            --integrationFlowId ${{ needs.upload_and_prep_config.outputs.iflow_id }}
+            --verbose true
+            
