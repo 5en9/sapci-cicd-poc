@@ -40,12 +40,12 @@ jobs:
             else
               echo "Manual dispatch for all iFlows (no specific iFlow ID provided)."
               # List all directories under iflows/, get their base name, and format as JSON
-              CHANGED_IFLOWS=$(ls -d iflows/*/ | xargs -n 1 basename | jq -R . | jq -s .)
+              CHANGED_IFLOWS=$(ls -d iflows/*/ | xargs -n 1 basename | jq -R . | jq -sc .)
             fi
           else
             echo "Push event detected, determining changed iFlows."
             # Get changed files between this and the previous commit, extract the iFlow directory, sort unique, and format as JSON
-            CHANGED_IFLOWS=$(git diff --name-only HEAD~1 HEAD | grep -oP 'iflows/\K[^/]+' | sort -u | jq -R . | jq -s .)
+            CHANGED_IFLOWS=$(git diff --name-only HEAD~1 HEAD | grep -oP 'iflows/\K[^/]+' | sort -u | jq -R . | jq -sc .)
           fi
           echo "Detected iFlows for deployment: $CHANGED_IFLOWS"
           echo "iflows=$CHANGED_IFLOWS" >> $GITHUB_OUTPUT
