@@ -22,11 +22,11 @@ jobs:
       - name: Determine iFlow Name from Filename
         id: iflow_details
         run: |
-          WORKFLOW_PATH="${{ github.workflow}}"
+          WORKFLOW_PATH="${{ github.workflow }}"
           FILENAME="${WORKFLOW_PATH##*/}"
-          WITHOUT_PREFIX="${FILENAME#promote-}"
-          IFLOW_ID="${WITHOUT_PREFIX%.yml}"
-          echo "Determined iFlow ID for artifact: $IFLOW_ID $WORKFLOW_PATH"
+          WITHOUT_PREFIX="${FILENAME#promote }"
+          IFLOW_ID="${WITHOUT_PREFIX%}"
+          echo "Determined iFlow ID for artifact: $IFLOW_ID"
           echo "id=$IFLOW_ID" >> "$GITHUB_OUTPUT"
 
       # ⬇️ 3. ARTIFACT now only contains the specific iFlow + global config ⬇️
