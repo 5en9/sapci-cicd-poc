@@ -54,4 +54,3 @@ jobs:
             **iFlow ID:** `${{ github.event.inputs.iflow_id }}`
             
             This pull request contains the latest version of the iFlow downloaded from the tenant. Please review the changes and merge.
-          labels: 'iflow-sync, automated-pr'
