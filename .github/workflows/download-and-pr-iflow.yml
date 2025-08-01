@@ -1,0 +1,66 @@
+name: Download iFlow and Create PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      iflow_id:
+        description: 'The technical ID of the iFlow to download'
+        required: true
+        type: string
+      package_id:
+        description: 'The technical ID of the Integration Package'
+        required: true
+        type: string
+
+jobs:
+  download_and_create_pr:
+    name: Download iFlow and Create PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'sapmachine'
+          java-version: '17'
+      
+      - name: Download iFlow artifact from tenant
+        id: download_iflow
+        uses: SAP/project-piper-action@v1
+        with:
+          command: cloudIntegrationDownload
+          # --- BTP Credentials from GitHub Secrets ---
+          apiServiceKey: ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
+          
+          # --- iFlow details from manual input ---
+          integrationFlowId: ${{ github.event.inputs.iflow_id }}
+          packageId: ${{ github.event.inputs.package_id }}
+          
+          # --- Destination path for the downloaded content ---
+          # This ensures the iFlow is saved to the correct directory structure
+          downloadPath: src/main/resources/scenarios/integration/${{ github.event.inputs.iflow_id }}
+
+      - name: Create Pull Request
+        id: create_pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Use a dynamic commit message based on the iFlow ID
+          commit-message: "feat: Sync iFlow ${{ github.event.inputs.iflow_id }}"
+          
+          # Create a unique branch name to avoid collisions
+          branch: "sync/iflow-${{ github.event.inputs.iflow_id }}"
+          
+          # Set a clear title and body for the Pull Request
+          title: "🔄 Sync iFlow `${{ github.event.inputs.iflow_id }}` from tenant"
+          body: |
+            This PR was automatically created by a GitHub Action.
+            
+            **iFlow ID:** `${{ github.event.inputs.iflow_id }}`
+            **Package ID:** `${{ github.event.inputs.package_id }}`
+            
+            This pull request contains the latest version of the iFlow downloaded from the tenant. Please review the changes and merge.
+          labels: 'iflow-sync, automated-pr'
