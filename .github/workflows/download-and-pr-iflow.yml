@@ -35,6 +35,18 @@ jobs:
             --integrationFlowId ${{ github.event.inputs.iflow_id }}
             --integrationFlowVersion active
             --downloadPath src/main/resources/scenarios/integration/${{ github.event.inputs.iflow_id }}
+      - name: Unzip iFlow Artifact
+        run: |
+          IFLOW_ID=${{ github.event.inputs.iflow_id }}
+          TARGET_DIR="src/main/resources/scenarios/integration/$IFLOW_ID"
+          ZIP_FILE="$TARGET_DIR/$IFLOW_ID.zip"
+          
+          echo "Unzipping $ZIP_FILE to $TARGET_DIR"
+          # Unzip the file, overwriting existing files without prompting (-o)
+          unzip -o "$ZIP_FILE" -d "$TARGET_DIR"
+          
+          # Clean up by removing the original .zip file
+          rm "$ZIP_FILE"
       - name: Create Pull Request
         id: create_pr
         uses: peter-evans/create-pull-request@v6
