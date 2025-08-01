@@ -83,8 +83,8 @@ jobs:
         # This matrix is dynamically populated by the 'determine_changes' job
         iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
         env:
-          - { name: 'd', secret: 'CPI_APISERVICEKEY_CREDENTIALS_ID' }
-          - { name: 'y', secret: 'CPI_APISERVICEKEY_CREDENTIALS_ID_Y' }
+          - { name: 'd' }
+          - { name: 'y' }
     
     environment: ${{ matrix.env.name }}
 
@@ -111,7 +111,7 @@ jobs:
         with:
           step-name: integrationArtifactUpload
           flags:
-            --apiServiceKey ${{ secrets[matrix.env.secret] }}
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
             --filePath ${{ matrix.iflow_id }}.zip
             --integrationFlowId ${{ matrix.iflow_id }}
             --integrationFlowName ${{ matrix.iflow_id }}
@@ -135,7 +135,7 @@ jobs:
             echo "Updating -> Key: $KEY"
             
             piper integrationArtifactUpdateConfiguration \
-              --apiServiceKey "${{ secrets[matrix.env.secret] }}" \
+              --apiServiceKey "${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}" \
               --integrationFlowId "${{ matrix.iflow_id }}" \
               --integrationFlowVersion "active" \
               --parameterKey "$KEY" \
