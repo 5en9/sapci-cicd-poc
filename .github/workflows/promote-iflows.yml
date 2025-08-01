@@ -1,0 +1,144 @@
+# This workflow promotes iFlows using a matrix strategy
+name: Promote iFlows
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # Trigger on changes in any iFlow directory
+      - 'iflows/**'
+  workflow_dispatch: # Allows manual runs
+    inputs:
+      iflow_id:
+        description: 'Optional: The ID of a specific iFlow to deploy. If empty, all iFlows will be deployed.'
+        required: false
+        type: string
+
+jobs:
+  determine_changes:
+    name: 🔎 Determine Changed iFlows
+    runs-on: ubuntu-latest
+    outputs:
+      iflows: ${{ steps.get_changes.outputs.iflows }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetch all history for git diff
+          fetch-depth: 0
+
+      - name: Identify changed iFlows
+        id: get_changes
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then # Manual trigger logic
+            IFLOW_ID_INPUT="${{ github.event.inputs.iflow_id }}"
+            if [ -n "$IFLOW_ID_INPUT" ]; then
+              echo "Manual dispatch for a specific iFlow: $IFLOW_ID_INPUT"
+              # Create a JSON array with the single specified iFlow
+              CHANGED_IFLOWS=$(echo "[\"$IFLOW_ID_INPUT\"]")
+            else
+              echo "Manual dispatch for all iFlows (no specific iFlow ID provided)."
+              # List all directories under iflows/, get their base name, and format as JSON
+              CHANGED_IFLOWS=$(ls -d iflows/*/ | xargs -n 1 basename | jq -R . | jq -s .)
+            fi
+          else
+            echo "Push event detected, determining changed iFlows."
+            # Get changed files between this and the previous commit, extract the iFlow directory, sort unique, and format as JSON
+            CHANGED_IFLOWS=$(git diff --name-only HEAD~1 HEAD | grep -oP 'iflows/\K[^/]+' | sort -u | jq -R . | jq -s .)
+          fi
+          echo "Detected iFlows for deployment: $CHANGED_IFLOWS"
+          echo "iflows=$CHANGED_IFLOWS" >> $GITHUB_OUTPUT
+
+  build:
+    name: 📦 Build ${{ matrix.iflow_id }}
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # Continue with other iFlows even if one fails
+      matrix:
+        iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Archive iFlow and Configs into an Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iflow-artifact-${{ matrix.iflow_id }} # Unique artifact per iFlow
+          path: |
+            iflows/${{ matrix.iflow_id }}
+            config/
+          retention-days: 7
+
+  deploy:
+    name: 🚀 Deploy ${{ matrix.iflow_id }} to ${{ matrix.env.name }}
+    needs: [determine_changes, build]
+    if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # This matrix is dynamically populated by the 'determine_changes' job
+        iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
+        env:
+          - { name: 'd', secret: 'CPI_APISERVICEKEY_CREDENTIALS_ID' }
+          - { name: 'y', secret: 'CPI_APISERVICEKEY_CREDENTIALS_ID_Y' }
+    
+    environment: ${{ matrix.env.name }}
+
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+          with:
+            name: iflow-artifact-${{ matrix.iflow_id }}
+
+      - name: Download and Setup Piper
+        run: |
+          curl -L https://github.com/SAP/jenkins-library/releases/latest/download/piper -o piper
+          chmod +x piper
+          echo "$(pwd)" >> $GITHUB_PATH
+
+      - name: Create Zip Archive
+        run: |
+          cd iflows/${{ matrix.iflow_id }}
+          zip -r ../../${{ matrix.iflow_id }}.zip .
+
+      - name: Deploy and Activate iFlow
+        id: deploy
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactUpload
+          flags:
+            --apiServiceKey ${{ secrets[matrix.env.secret] }}
+            --filePath ${{ matrix.iflow_id }}.zip
+            --integrationFlowId ${{ matrix.iflow_id }}
+            --integrationFlowName ${{ matrix.iflow_id }}
+            --verbose true
+
+      - name: Update Configuration
+        run: |
+          CONFIG_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters-${{ matrix.env.name }}.prop"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Configuration file not found: $CONFIG_FILE. Skipping parameter updates."
+            exit 0
+          fi
+          
+          echo "Reading parameters from $CONFIG_FILE and updating iFlow..."
+          # A shell loop is used here as a trade-off to enable the environment matrix.
+          # This avoids the massive duplication of jobs from the previous workflow.
+          grep -v '^#' "$CONFIG_FILE" | grep -v '^$' | while IFS= read -r line || [[ -n "$line" ]];
+          do
+            KEY=$(echo "$line" | cut -d'=' -f1)
+            VALUE=$(echo "$line" | cut -d'=' -f2-)
+            echo "Updating -> Key: $KEY"
+            
+            piper integrationArtifactUpdateConfiguration \
+              --apiServiceKey "${{ secrets[matrix.env.secret] }}" \
+              --integrationFlowId "${{ matrix.iflow_id }}" \
+              --integrationFlowVersion "active" \
+              --parameterKey "$KEY" \
+              --parameterValue "$VALUE" \
+              --verbose true
+          done
