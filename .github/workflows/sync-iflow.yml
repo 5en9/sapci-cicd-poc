@@ -1,4 +1,4 @@
-name: Download iFlow and Create PR
+name: Download iFlow and Create Branch
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: true
         type: string
 jobs:
-  download_and_create_pr:
+  download_and_create_branch:
     name: Download iFlow and Create PR
     runs-on: ubuntu-latest
     permissions:
@@ -52,22 +52,15 @@ jobs:
           rm -rf v*
           echo "Cleanup complete."
           
-      - name: Create Pull Request
-        id: create_pr
-        uses: peter-evans/create-pull-request@v6
+      - name: Create Branch
+        id: create_branch
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git checkout -b "sync/iflow-${{ github.event.inputs.iflow_id }}"
+          git add .
+          git commit -m "feat: Sync iFlow ${{ github.event.inputs.iflow_id }}"
+          git push origin "sync/iflow-${{ github.event.inputs.iflow_id }}"
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Use a dynamic commit message based on the iFlow ID
-          commit-message: "feat: Sync iFlow ${{ github.event.inputs.iflow_id }}"
           
-          # Create a unique branch name to avoid collisions
-          branch: "sync/iflow-${{ github.event.inputs.iflow_id }}"
-          
-          # Set a clear title and body for the Pull Request
-          title: "🔄 Sync iFlow `${{ github.event.inputs.iflow_id }}` from tenant"
-          body: |
-            This PR was automatically created by a GitHub Action.
-            
-            **iFlow ID:** `${{ github.event.inputs.iflow_id }}`
-            
-            This pull request contains the latest version of the iFlow downloaded from the tenant. Please review the changes and merge.
