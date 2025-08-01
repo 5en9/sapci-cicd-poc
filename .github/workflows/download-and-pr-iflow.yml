@@ -29,7 +29,7 @@ jobs:
       
       - name: Download iFlow artifact from tenant
         id: download_iflow
-        uses: SAP/project-piper-action@v1
+        uses: SAP/project-piper-action@main
         with:
           command: cloudIntegrationDownload
           # --- BTP Credentials from GitHub Secrets ---
