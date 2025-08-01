@@ -85,7 +85,11 @@ jobs:
           # Read the properties file, filter comments/blanks, and convert to a JSON array for the matrix
           JSON_MATRIX=$(grep -v '^#' "$CONFIG_FILE" | grep -v '^$' | jq -R 'split("=") | {key: .[0], value: .[1]}' | jq -s '.')
           echo "Generated Matrix for configuration: $JSON_MATRIX"
-          echo "matrix=$JSON_MATRIX" >> $GITHUB_OUTPUT
+          {
+            echo 'matrix<<EOF'
+            echo "$JSON_MATRIX"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
   update_configuration:
     name: ⚙️ Configure iflow1 in D
