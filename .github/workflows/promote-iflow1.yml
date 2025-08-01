@@ -35,3 +35,44 @@ jobs:
             iflows/${{ steps.iflow_details.outputs.id }}
             config/
           retention-days: 7
+
+  deploy-env-d:
+    name: 🧪 Deploy to D
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the deployable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: iflow-artifact-${{ github.run_id }}
+
+      - name: Determine iFlow Name
+        id: iflow_details
+        run: |
+          IFLOW_ID=$(echo "${{ github.workflow }}" | awk '{print $2}')
+          echo "Determined iFlow ID from workflow name: $IFLOW_ID"
+          echo "id=$IFLOW_ID" >> "$GITHUB_OUTPUT"
+      
+      - name: Prepare Parameter File for D
+        run: |
+          echo "Renaming parameters.prop.qa to parameters.prop"
+          cp iflows/${{ steps.iflow_details.outputs.id }}/src/main/resources/parameters-d.prop parameters.prop
+          echo "--- Content of parameters.prop ---"
+          cat parameters.prop
+
+      - name: Create Zip Archive for D
+        run: |
+          cd iflows/${{ steps.iflow_details.outputs.id }}
+          zip -r ../../${{ steps.iflow_details.outputs.id }}.zip .
+
+      - name: Deploy to D
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactDownload
+          flags:
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
+            --filePath iflows/${{ steps.iflow_details.outputs.id }}
+            --integrationFlowId ${{ steps.iflow_details.outputs.id }}
+            --integrationFlowName ${{ steps.iflow_details.outputs.id }}
+            --packageId package1
+            --verbose true
