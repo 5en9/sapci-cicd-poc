@@ -68,7 +68,7 @@ jobs:
       - name: Deploy to D
         uses: SAP/project-piper-action@main
         with:
-          step-name: integrationArtifactDownload
+          step-name: integrationArtifactUpload
           flags:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
             --filePath iflows/${{ steps.iflow_details.outputs.id }}
