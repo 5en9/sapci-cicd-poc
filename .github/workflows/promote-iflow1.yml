@@ -71,7 +71,7 @@ jobs:
           step-name: integrationArtifactUpload
           flags:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
-            --filePath iflows/${{ steps.iflow_details.outputs.id }}
+            --filePath iflows/${{ steps.iflow_details.outputs.id }}.zip
             --integrationFlowId ${{ steps.iflow_details.outputs.id }}
             --integrationFlowName ${{ steps.iflow_details.outputs.id }}
             --packageId package1
