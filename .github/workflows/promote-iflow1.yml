@@ -46,6 +46,17 @@ jobs:
         with:
           name: iflow-artifact-${{ github.run_id }}
 
+      - name: Download Piper binary
+        run: |
+          # Get the latest Piper release URL
+          PIPER_URL=$(curl -s https://api.github.com/repos/SAP/jenkins-library/releases/latest | jq -r '.assets[] | select(.name | contains("piper")) | .browser_download_url')
+          
+          # Download Piper
+          curl -L $PIPER_URL -o piper
+
+          # Make Piper executable
+          chmod +x piper
+
       - name: Determine iFlow Name
         id: iflow_details
         run: |
@@ -74,6 +85,7 @@ jobs:
         run: |
           echo "Reading parameters from parameters-d.prop and updating iFlow..."
           
+          export PATH=$PATH:$(pwd)
           # Filter out comments and empty lines
           grep -v '^#' iflows/${{ steps.iflow_details.outputs.id }}/src/main/resources/parameters-d.prop | grep -v '^$' | while IFS= read -r line
           do
