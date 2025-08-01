@@ -133,4 +133,98 @@ jobs:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
             --integrationFlowId ${{ needs.upload_and_prep_config.outputs.iflow_id }}
             --verbose true
+
+  upload_and_prep_config_y:
+    name: 🧪 Deploy to Y
+    needs: build
+    outputs:
+      iflow_id: ${{ steps.iflow_details.outputs.id }}
+      config_matrix: ${{ steps.prep_matrix.outputs.matrix }}
+    environment: y
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the deployable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: iflow-artifact-${{ github.run_id }}
+  
+      - name: Determine iFlow Name
+        id: iflow_details
+        run: |
+          IFLOW_ID=$(echo "${{ github.workflow }}" | awk '{print $2}')
+          echo "Determined iFlow ID from workflow name: $IFLOW_ID"
+          echo "id=$IFLOW_ID" >> "$GITHUB_OUTPUT"
+      
+      - name: Create Zip Archive for Y
+        run: |
+          cd iflows/${{ steps.iflow_details.outputs.id }}
+          zip -r ../../${{ steps.iflow_details.outputs.id }}.zip .
+
+      - name: Deploy to Y
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactUpload
+          flags:
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID_Y }}
+            --filePath ${{ steps.iflow_details.outputs.id }}.zip
+            --integrationFlowId ${{ steps.iflow_details.outputs.id }}
+            --integrationFlowName ${{ steps.iflow_details.outputs.id }}
+            --packageId package1
+            --verbose true
+
+      - name: Prepare Configuration Matrix for Y
+        id: prep_matrix
+        run: |
+          CONFIG_FILE="iflows/${{ steps.iflow_details.outputs.id }}/src/main/resources/parameters-y.prop"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Configuration file not found: $CONFIG_FILE. Skipping parameter updates."
+            echo "matrix=[]" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # Read the properties file, filter comments/blanks, and convert to a JSON array for the matrix
+          JSON_MATRIX=$(grep -v '^#' "$CONFIG_FILE" | grep -v '^$' | jq -R 'split("=") | {key: .[0], value: .[1]}' | jq -s '.')
+          echo "Generated Matrix for configuration: $JSON_MATRIX"
+          {
+            echo 'matrix<<EOF'
+            echo "$JSON_MATRIX"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+  update_configuration_y:
+    name: ⚙️ Configure iflow in Y
+    needs: upload_and_prep_config_y # Depends on the previous job
+    environment: y
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJSON(needs.upload_and_prep_config_y.outputs.config_matrix) }}
+    if: ${{ fromJSON(needs.upload_and_prep_config_y.outputs.config_matrix)[0] }}
+    steps:
+      - name: Update ${{ matrix.config.key }}
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactUpdateConfiguration
+          flags:
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID_Y }}
+            --integrationFlowId ${{ needs.upload_and_prep_config_y.outputs.iflow_id }}
+            --integrationFlowVersion active
+            --parameterKey ${{ matrix.config.key }}
+            --parameterValue ${{ matrix.config.value }}
+            --verbose true
+
+  deploy_y:
+    name: deploy iflow in Y
+    needs: [upload_and_prep_config_y, update_configuration_y]
+    environment: y
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactDeploy
+          flags:
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID_Y }}
+            --integrationFlowId ${{ needs.upload_and_prep_config_y.outputs.iflow_id }}
+            --verbose true
             
