@@ -61,6 +61,4 @@ jobs:
           git add .
           git commit -m "feat: Sync iFlow ${{ github.event.inputs.iflow_id }}"
           git push origin "sync/iflow-${{ github.event.inputs.iflow_id }}"
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           
