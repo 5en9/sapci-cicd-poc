@@ -37,7 +37,6 @@ jobs:
 
   deploy_and_prep_config:
     name: 🧪 Deploy to D
-    id: deploy_prep # Add an ID to reference this job's outputs
     needs: build
     outputs:
       iflow_id: ${{ steps.iflow_details.outputs.id }}
