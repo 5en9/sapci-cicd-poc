@@ -106,6 +106,7 @@ jobs:
             CREATE_RESPONSE=$(curl -s -X POST \
               -H "Authorization: Bearer $ACCESS_TOKEN" \
               -H "Content-Type: application/json" \
+              -H "Accept: application/json" \
               -d "{\"Id\": \"$PACKAGE_ID\", \"Name\": \"$PACKAGE_ID\", \"ShortText\": \"Automatically created by CI/CD pipeline\"}" \
               "${{ env.BASE_URL }}/api/v1/IntegrationPackages")
             
