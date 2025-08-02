@@ -61,7 +61,7 @@ jobs:
           TOKEN_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.tokenurl")
           BASE_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.url")
 
-          echo "::add-mask::$CLIENT_ID"
+          echo "$CLIENT_ID"
           echo "::add-mask::$CLIENT_SECRET"
           echo "::add-mask::$TOKEN_URL"
           echo "::add-mask::$BASE_URL"
