@@ -1,0 +1,149 @@
+name: Reusable iFlow Deploy
+
+on:
+  workflow_call:
+    inputs:
+      iflow_id:
+        required: true
+        type: string
+      tenants:
+        required: true
+        type: string
+      environments:
+        required: true
+        type: string
+      test_environments:
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    name: 🚀 Deploy ${{ inputs.iflow_id }} to ${{ matrix.env }}-${{ matrix.tenant }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      max-parallel: 1
+      matrix:
+        tenant: ${{ fromJSON(inputs.tenants) }}
+        env: ${{ fromJSON(inputs.environments) }}
+    
+    environment: ${{ matrix.tenant }}
+
+    env:
+      SECRETS_CONTEXT: ${{ toJSON(secrets) }}
+
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+            name: iflow-artifact-${{ inputs.iflow_id }}
+
+      - name: Download and Setup Piper
+        run: |
+          curl -L https://github.com/SAP/jenkins-library/releases/latest/download/piper -o piper
+          chmod +x piper
+          echo "$(pwd)" >> $GITHUB_PATH
+
+      - name: Set API Key
+        id: set_api_key
+        run: |
+          SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
+          API_KEY=$(echo "$SECRETS_CONTEXT" | jq -r ."$SECRET_NAME")
+          if [ -z "$API_KEY" ] || [ "$API_KEY" == "null" ]; then
+            echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
+            exit 1
+          fi
+          echo "::add-mask::$API_KEY"
+          echo "API_KEY=$API_KEY" >> $GITHUB_ENV
+
+      - name: Create Zip Archive
+        run: |
+          cd iflows/${{ inputs.iflow_id }}
+          zip -r ../../${{ inputs.iflow_id }}.zip .
+
+      - name: Upload iFlow
+        id: deploy
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactUpload
+          flags: |
+            --apiServiceKey ${{ env.API_KEY }}
+            --filePath ${{ inputs.iflow_id }}.zip
+            --integrationFlowId ${{ inputs.iflow_id }}
+            --integrationFlowName ${{ inputs.iflow_id }}
+            --verbose true
+
+      - name: Update Configuration and Deploy
+        env:
+          API_KEY: ${{ env.API_KEY }}
+        run: |
+          # Define file paths
+          PROPDEF_FILE="iflows/${{ inputs.iflow_id }}/src/main/resources/parameters.propdef"
+          GLOBAL_CONFIG_FILE="config/parameters-${{ matrix.env }}.prop"
+          IFLOW_CONFIG_FILE="iflows/${{ inputs.iflow_id }}/src/main/resources/parameters-${{ matrix.env }}.prop"
+
+          # Check if the definition file exists. If not, there are no parameters to configure.
+          if [ ! -f "$PROPDEF_FILE" ]; then
+            echo "Parameter definition file not found: $PROPDEF_FILE. Skipping configuration."
+          else
+            echo "Reading parameter definitions from $PROPDEF_FILE"
+            
+            while IFS= read -r PARAM_NAME || [[ -n "$PARAM_NAME" ]]; do
+                echo "Processing parameter: '$PARAM_NAME'"
+                PARAM_VALUE=""
+
+                # 1. Check for iFlow-specific override
+                if [ -f "$IFLOW_CONFIG_FILE" ]; then
+                  VALUE_LINE=$(grep "^${PARAM_NAME}=" "$IFLOW_CONFIG_FILE" || true)
+                  if [ -n "$VALUE_LINE" ]; then
+                    PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
+                    echo "  Found iFlow-specific value."
+                  fi
+                fi
+                # 2. If not found, check for global value
+                if [ -z "$PARAM_VALUE" ] && [ -f "$GLOBAL_CONFIG_FILE" ]; then
+                  VALUE_LINE=$(grep "^${PARAM_NAME}=" "$GLOBAL_CONFIG_FILE" || true)
+                  if [ -n "$VALUE_LINE" ]; then
+                    PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
+                    echo "  Found global value."
+                  fi
+                fi
+                # 3. If a value was found, update the configuration
+                if [ -n "$PARAM_VALUE" ]; then
+                  echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
+                  output=$(piper integrationArtifactUpdateConfiguration \
+                      --apiServiceKey "$API_KEY" \
+                      --integrationFlowId "${{ inputs.iflow_id }}" \
+                      --integrationFlowVersion "active" \
+                      --parameterKey "$PARAM_NAME" \
+                      --parameterValue "$PARAM_VALUE" \
+                      --verbose true 2>&1)
+                  exit_code=$?
+
+                  echo "$output"
+
+                  if [ $exit_code -ne 0 ]; then
+                    if echo "$output" | grep -q -E "does not exist|not found for Integration Flow"; then
+                      echo "Warning: Parameter '$PARAM_NAME' not found on iFlow. This is expected for package-level parameters. Skipping."
+                    else
+                      echo "Error: A critical error occurred during parameter update. Failing the step."
+                      exit 1
+                    fi
+                  fi
+                else
+                  echo "  No value found for '$PARAM_NAME' in property files. Skipping."
+                fi
+            done < <(grep -oP '<name>\K[^<]+' "$PROPDEF_FILE")
+          fi
+          
+          echo "Configuration updated. Now deploying the iFlow..."
+          piper integrationArtifactDeploy \
+            --apiServiceKey "$API_KEY" \
+            --integrationFlowId "${{ inputs.iflow_id }}" \
+            --verbose true
+
+      - name: Automated Testing
+        if: contains(fromJSON(inputs.test_environments), matrix.env)
+        run: |
+          echo "Running automated tests for environment ${{ matrix.env }}..."
+          # Add your testing commands here
