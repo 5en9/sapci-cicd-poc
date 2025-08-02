@@ -1,0 +1,5 @@
+refactor(promote-iflows): use tenant-specific environments and secrets
+
+- Use a single GitHub environment per tenant.
+- Dynamically determine the secret based on the tenant name (CI_APISERVICEKEY_{TENANT}).
+- Move tenant and environment configuration to deployment.yml.

@@ -15,7 +15,7 @@ on:
         required: true
         type: string
       tenants:
-        description: 'Comma-separated list of tenants to deploy to (e.g., a,b,c). If not provided, will use config/deployment.yml.'
+        description: 'Comma-separated list of tenants to deploy to (e.g., A,B,C). If not provided, will use config/deployment.yml.'
         required: false
         type: string
 
@@ -67,23 +67,23 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tenants }}" ]; then
             TENANTS_INPUT="${{ github.event.inputs.tenants }}"
             echo "Using tenants from workflow dispatch: $TENANTS_INPUT"
-            TENANTS_JSON=$(echo "$TENANTS_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc .)
+            TENANTS_JSON=$(echo "$TENANTS_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc . | tr '[:lower:]' '[:upper:]')
           elif [ -f "config/deployment.yml" ]; then
             echo "Using tenants from config/deployment.yml"
-            TENANTS_JSON=$(yq -o=json '.tenants' config/deployment.yml | jq -c '.')
+            TENANTS_JSON=$(yq -o=json '.tenants' config/deployment.yml | jq -c '.' | tr '[:lower:]' '[:upper:]')
           else
-            echo "No tenant configuration found, using default tenant: a"
-            TENANTS_JSON='["a"]'
+            echo "No tenant configuration found, using default tenant: A"
+            TENANTS_JSON='["A"]'
           fi
           echo "Tenants for deployment (JSON): $TENANTS_JSON"
           echo "tenants=$TENANTS_JSON" >> $GITHUB_OUTPUT
 
           if [ -f "config/deployment.yml" ]; then
             echo "Using environments from config/deployment.yml"
-            ENV_JSON=$(yq -o=json '.environments' config/deployment.yml | jq -c '.')
+            ENV_JSON=$(yq -o=json '.environments' config/deployment.yml | jq -c '.' | tr '[:lower:]' '[:upper:]')
           else
-            echo "No environment configuration found, using default environments: d, y"
-            ENV_JSON='["d", "y"]'
+            echo "No environment configuration found, using default environments: D, Y"
+            ENV_JSON='["D", "Y"]'
           fi
           echo "Environments for deployment (JSON): $ENV_JSON"
           echo "environments=$ENV_JSON" >> $GITHUB_OUTPUT
@@ -142,8 +142,7 @@ jobs:
       - name: Set API Key
         id: set_api_key
         run: |
-          TENANT_UPPER=$(echo "${{ matrix.tenant }}" | tr '[:lower:]' '[:upper:]')
-          SECRET_NAME="CI_APISERVICEKEY_$TENANT_UPPER"
+          SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
           API_KEY=$(echo $SECRETS_CONTEXT | jq -r ."$SECRET_NAME")
           if [ -z "$API_KEY" ] || [ "$API_KEY" == "null" ]; then
             echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
