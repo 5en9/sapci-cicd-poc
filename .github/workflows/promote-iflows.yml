@@ -27,6 +27,7 @@ jobs:
       iflows: ${{ steps.get_changes.outputs.iflows }}
       tenants: ${{ steps.get_config.outputs.tenants }}
       environments: ${{ steps.get_config.outputs.environments }}
+      test_environments: ${{ steps.get_config.outputs.test_environments }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -81,12 +82,16 @@ jobs:
           if [ -f "config/deployment.yml" ]; then
             echo "Using environments from config/deployment.yml"
             ENV_JSON=$(yq -o=json '.environments' config/deployment.yml | jq -c '.' | tr '[:lower:]' '[:upper:]')
+            TEST_ENV_JSON=$(yq -o=json '.test_environments' config/deployment.yml | jq -c '.' | tr '[:lower:]' '[:upper:]')
           else
             echo "No environment configuration found, using default environments: D, Y"
             ENV_JSON='["D", "Y"]'
+            TEST_ENV_JSON='["Y"]'
           fi
           echo "Environments for deployment (JSON): $ENV_JSON"
           echo "environments=$ENV_JSON" >> $GITHUB_OUTPUT
+          echo "Test environments (JSON): $TEST_ENV_JSON"
+          echo "test_environments=$TEST_ENV_JSON" >> $GITHUB_OUTPUT
 
   build:
     name: 📦 Build ${{ matrix.iflow_id }}
@@ -236,3 +241,9 @@ jobs:
             --apiServiceKey "$API_KEY" \
             --integrationFlowId "${{ matrix.iflow_id }}" \
             --verbose true
+
+      - name: Automated Testing
+        if: contains(fromJSON(needs.determine_changes.outputs.test_environments), matrix.env)
+        run: |
+          echo "Running automated tests for environment ${{ matrix.env }}..."
+          # Add your testing commands here

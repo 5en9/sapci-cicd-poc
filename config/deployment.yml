@@ -3,3 +3,5 @@ tenants:
 environments:
   - D
   - Y
+test_environments:
+  - D
