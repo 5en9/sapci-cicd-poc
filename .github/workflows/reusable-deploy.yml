@@ -44,17 +44,80 @@ jobs:
           chmod +x piper
           echo "$(pwd)" >> $GITHUB_PATH
 
-      - name: Set API Key
-        id: set_api_key
+      - name: Set API Key and OAuth Details
+        id: set_api_key_and_oauth
         run: |
           SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
-          API_KEY=$(echo "$SECRETS_CONTEXT" | jq -r ."$SECRET_NAME")
-          if [ -z "$API_KEY" ] || [ "$API_KEY" == "null" ]; then
+          API_KEY_JSON=$(echo "$SECRETS_CONTEXT" | jq -r ."$SECRET_NAME")
+          if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
             echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
             exit 1
           fi
-          echo "::add-mask::$API_KEY"
-          echo "API_KEY=$API_KEY" >> $GITHUB_ENV
+          
+          CLIENT_ID=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientid")
+          CLIENT_SECRET=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientsecret")
+          TOKEN_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.tokenurl")
+          BASE_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.url")
+
+          echo "::add-mask::$CLIENT_ID"
+          echo "::add-mask::$CLIENT_SECRET"
+          echo "::add-mask::$TOKEN_URL"
+          echo "::add-mask::$BASE_URL"
+          echo "::add-mask::$API_KEY_JSON" # Mask the whole JSON too
+
+          echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
+          echo "CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
+          echo "TOKEN_URL=$TOKEN_URL" >> $GITHUB_ENV
+          echo "BASE_URL=$BASE_URL" >> $GITHUB_ENV
+
+      - name: Check and Create Integration Package
+        run: |
+          PACKAGE_ID="${{ vars.CI_PACKAGE_ID }}"
+          
+          echo "Getting OAuth token..."
+          TOKEN_RESPONSE=$(curl -s -X POST \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&client_id=${{ env.CLIENT_ID }}&client_secret=${{ env.CLIENT_SECRET }}" \
+            "${{ env.TOKEN_URL }}")
+          
+          ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r ".access_token")
+          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" == "null" ]; then
+            echo "Error: Failed to obtain access token."
+            echo "Response: $TOKEN_RESPONSE"
+            exit 1
+          fi
+          echo "::add-mask::$ACCESS_TOKEN" # Mask the access token
+          echo "Access token obtained."
+
+          echo "Checking if Integration Package '$PACKAGE_ID' exists..."
+          HTTP_CODE=$(curl -s -o /dev/null -w "%\{http_code\}" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')")
+
+          echo "HTTP Status Code: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" == "404" ]; then
+            echo "Integration Package '$PACKAGE_ID' not found. Creating it..."
+            CREATE_RESPONSE=$(curl -s -X POST \
+              -H "Authorization: Bearer $ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"Id\": \"$PACKAGE_ID\", \"Name\": \"$PACKAGE_ID\", \"ShortText\": \"Automatically created by CI/CD pipeline\"}" \
+              "${{ env.BASE_URL }}/api/v1/IntegrationPackages")
+            
+            echo "Create Package Response: $CREATE_RESPONSE"
+            
+            if echo "$CREATE_RESPONSE" | jq -e ".d.Id" > /dev/null; then
+              echo "Integration Package '$PACKAGE_ID' created successfully."
+            else
+              echo "Error: Failed to create Integration Package '$PACKAGE_ID'."
+              exit 1
+            fi
+          elif [ "$HTTP_CODE" == "200" ]; then
+            echo "Integration Package '$PACKAGE_ID' already exists. Skipping creation."
+          else
+            echo "Error: Unexpected HTTP status code $HTTP_CODE when checking Integration Package existence."
+            exit 1
+          fi
 
       - name: Create Zip Archive
         run: |
@@ -113,7 +176,7 @@ jobs:
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
                   output=$(piper integrationArtifactUpdateConfiguration \
-                      --apiServiceKey "$API_KEY" \
+                      --apiServiceKey "${{ env.API_KEY }}" \
                       --integrationFlowId "${{ inputs.iflow_id }}" \
                       --integrationFlowVersion "active" \
                       --parameterKey "$PARAM_NAME" \
@@ -139,7 +202,7 @@ jobs:
           
           echo "Configuration updated. Now deploying the iFlow..."
           piper integrationArtifactDeploy \
-            --apiServiceKey "$API_KEY" \
+            --apiServiceKey "${{ env.API_KEY }}" \
             --integrationFlowId "${{ inputs.iflow_id }}" \
             --verbose true
 
