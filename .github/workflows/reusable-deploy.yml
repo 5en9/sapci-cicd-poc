@@ -94,11 +94,13 @@ jobs:
           echo "Access token obtained."
 
           echo "Checking if Integration Package '$PACKAGE_ID' exists..."
-          HTTP_CODE=$(curl -v -s -o /dev/null -w "%\{http_code\}" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')" 2>&1)
+          CURL_COMMAND="curl -v -s -o /dev/null -w \"%{http_code}\" -H \"Authorization: Bearer $ACCESS_TOKEN\" \"${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')\""
+          echo "Debugging: Executing curl command: $CURL_COMMAND"
+          HTTP_CODE=$(eval $CURL_COMMAND 2>&1)
+          CURL_EXIT_CODE=$?
 
           echo "HTTP Status Code: $HTTP_CODE"
+          echo "Curl Exit Code: $CURL_EXIT_CODE"
 
           if [ "$HTTP_CODE" == "404" ]; then
             echo "Integration Package '$PACKAGE_ID' not found. Creating it..."
@@ -119,7 +121,7 @@ jobs:
           elif [ "$HTTP_CODE" == "200" ]; then
             echo "Integration Package '$PACKAGE_ID' already exists. Skipping creation."
           else
-            echo "Error: Unexpected HTTP status code $HTTP_CODE when checking Integration Package existence."
+            echo "Error: Unexpected HTTP status code $HTTP_CODE when checking Integration Package existence. Curl Exit Code: $CURL_EXIT_CODE"
             exit 1
           fi
 
