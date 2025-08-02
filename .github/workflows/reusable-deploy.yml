@@ -48,7 +48,9 @@ jobs:
         id: set_api_key_and_oauth
         run: |
           SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
+          echo "Debugging: SECRET_NAME is $SECRET_NAME"
           API_KEY_JSON=$(echo "$SECRETS_CONTEXT" | jq -r ."$SECRET_NAME")
+          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
           if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
             echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
             exit 1
@@ -69,6 +71,7 @@ jobs:
           echo "CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
           echo "TOKEN_URL=$TOKEN_URL" >> $GITHUB_ENV
           echo "BASE_URL=$BASE_URL" >> $GITHUB_ENV
+          echo "API_KEY=$API_KEY_JSON" >> $GITHUB_ENV # This line sets the API_KEY environment variable
 
       - name: Check and Create Integration Package
         run: |
@@ -92,7 +95,7 @@ jobs:
           echo "Access token obtained."
 
           echo "Checking if Integration Package '$PACKAGE_ID' exists..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{\http_code}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')")
 
@@ -117,7 +120,7 @@ jobs:
           elif [ "$HTTP_CODE" == "200" ]; then
             echo "Integration Package '$PACKAGE_ID' already exists. Skipping creation."
           else
-            echo "Error: Unexpected HTTP status code $HTTP_CODE when checking Integration Package existence."
+            echo "Error: Unexpected HTTP status code '$HTTP_CODE' when checking Integration Package existence."
             exit 1
           fi
 
