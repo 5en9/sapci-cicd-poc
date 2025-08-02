@@ -120,7 +120,7 @@ jobs:
     needs: [determine_changes, build]
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
     uses: ./.github/workflows/reusable-deploy.yml
