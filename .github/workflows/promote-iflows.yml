@@ -14,19 +14,30 @@ on:
         description: 'Comma-separated list of iFlow IDs to deploy, or "all" to deploy all iFlows.'
         required: true
         type: string
+      tenants:
+        description: 'Comma-separated list of tenants to deploy to (e.g., a,b,c). If not provided, will use config/deployment.yml.'
+        required: false
+        type: string
 
 jobs:
   determine_changes:
-    name: 🔎 Determine Changed iFlows
+    name: 🔎 Determine Changed iFlows and Tenants
     runs-on: ubuntu-latest
     outputs:
       iflows: ${{ steps.get_changes.outputs.iflows }}
+      tenants: ${{ steps.get_config.outputs.tenants }}
+      environments: ${{ steps.get_config.outputs.environments }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           # Fetch all history for git diff
           fetch-depth: 0
+
+      - name: Set up yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
 
       - name: Identify changed iFlows
         id: get_changes
@@ -49,6 +60,33 @@ jobs:
           fi
           echo "Detected iFlows for deployment: $CHANGED_IFLOWS"
           echo "iflows=$CHANGED_IFLOWS" >> $GITHUB_OUTPUT
+
+      - name: Determine tenants and environments for deployment
+        id: get_config
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tenants }}" ]; then
+            TENANTS_INPUT="${{ github.event.inputs.tenants }}"
+            echo "Using tenants from workflow dispatch: $TENANTS_INPUT"
+            TENANTS_JSON=$(echo "$TENANTS_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc .)
+          elif [ -f "config/deployment.yml" ]; then
+            echo "Using tenants from config/deployment.yml"
+            TENANTS_JSON=$(yq -o=json '.tenants' config/deployment.yml | jq -c .)
+          else
+            echo "No tenant configuration found, using default tenant: a"
+            TENANTS_JSON='["a"]'
+          fi
+          echo "Tenants for deployment (JSON): $TENANTS_JSON"
+          echo "tenants=$TENANTS_JSON" >> $GITHUB_OUTPUT
+
+          if [ -f "config/deployment.yml" ]; then
+            echo "Using environments from config/deployment.yml"
+            ENV_JSON=$(yq -o=json '.environments' config/deployment.yml | jq -c .)
+          else
+            echo "No environment configuration found, using default environments: d, y"
+            ENV_JSON='["d", "y"]'
+          fi
+          echo "Environments for deployment (JSON): $ENV_JSON"
+          echo "environments=$ENV_JSON" >> $GITHUB_OUTPUT
 
   build:
     name: 📦 Build ${{ matrix.iflow_id }}
@@ -73,20 +111,21 @@ jobs:
           retention-days: 7
 
   deploy:
-    name: 🚀 Deploy ${{ matrix.iflow_id }} to ${{ matrix.env.name }}
+    name: 🚀 Deploy ${{ matrix.iflow_id }} to ${{ matrix.env }}-${{ matrix.tenant }}
     needs: [determine_changes, build]
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # This matrix is dynamically populated by the 'determine_changes' job
         iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
-        env:
-          - { name: 'd' }
-          - { name: 'y' }
+        tenant: ${{ fromJSON(needs.determine_changes.outputs.tenants) }}
+        env: ${{ fromJSON(needs.determine_changes.outputs.environments) }}
     
-    environment: ${{ matrix.env.name }}
+    environment: ${{ matrix.tenant }}
+
+    env:
+      SECRETS_CONTEXT: ${{ toJSON(secrets) }}
 
     steps:
       - name: Download Artifact
@@ -100,29 +139,43 @@ jobs:
           chmod +x piper
           echo "$(pwd)" >> $GITHUB_PATH
 
+      - name: Set API Key
+        id: set_api_key
+        run: |
+          TENANT_UPPER=$(echo "${{ matrix.tenant }}" | tr '[:lower:]' '[:upper:]')
+          SECRET_NAME="CI_APISERVICEKEY_$TENANT_UPPER"
+          API_KEY=$(echo $SECRETS_CONTEXT | jq -r ."$SECRET_NAME")
+          if [ -z "$API_KEY" ] || [ "$API_KEY" == "null" ]; then
+            echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
+            exit 1
+          fi
+          echo "API_KEY=$API_KEY" >> $GITHUB_ENV
+
       - name: Create Zip Archive
         run: |
           cd iflows/${{ matrix.iflow_id }}
           zip -r ../../${{ matrix.iflow_id }}.zip .
 
-      - name: Deploy and Activate iFlow
+      - name: Upload iFlow
         id: deploy
         uses: SAP/project-piper-action@main
         with:
           step-name: integrationArtifactUpload
           flags:
-            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
+            --apiServiceKey ${{ env.API_KEY }}
             --filePath ${{ matrix.iflow_id }}.zip
             --integrationFlowId ${{ matrix.iflow_id }}
             --integrationFlowName ${{ matrix.iflow_id }}
             --verbose true
 
-      - name: Update Configuration
+      - name: Update Configuration and Deploy
+        env:
+          API_KEY: ${{ env.API_KEY }}
         run: |
           # Define file paths
           PROPDEF_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters.propdef"
-          GLOBAL_CONFIG_FILE="config/parameters-${{ matrix.env.name }}.prop"
-          IFLOW_CONFIG_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters-${{ matrix.env.name }}.prop"
+          GLOBAL_CONFIG_FILE="config/parameters-${{ matrix.env }}.prop"
+          IFLOW_CONFIG_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters-${{ matrix.env }}.prop"
 
           # Check if the definition file exists. If not, there are no parameters to configure.
           if [ ! -f "$PROPDEF_FILE" ]; then
@@ -130,16 +183,12 @@ jobs:
           else
             echo "Reading parameter definitions from $PROPDEF_FILE"
             
-            # Use process substitution (< <(...)) for the loop. This is more robust
-            # than a standard pipe, as it prevents commands inside the loop from
-            # accidentally consuming the input stream.
             while IFS= read -r PARAM_NAME || [[ -n "$PARAM_NAME" ]]; do
                 echo "Processing parameter: '$PARAM_NAME'"
                 PARAM_VALUE=""
 
                 # 1. Check for iFlow-specific override
                 if [ -f "$IFLOW_CONFIG_FILE" ]; then
-                  # Use '|| true' to prevent grep from exiting with an error if the parameter is not found in the file.
                   VALUE_LINE=$(grep "^${PARAM_NAME}=" "$IFLOW_CONFIG_FILE" || true)
                   if [ -n "$VALUE_LINE" ]; then
                     PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
@@ -148,7 +197,6 @@ jobs:
                 fi
                 # 2. If not found, check for global value
                 if [ -z "$PARAM_VALUE" ] && [ -f "$GLOBAL_CONFIG_FILE" ]; then
-                  # Use '|| true' here as well for the same reason.
                   VALUE_LINE=$(grep "^${PARAM_NAME}=" "$GLOBAL_CONFIG_FILE" || true)
                   if [ -n "$VALUE_LINE" ]; then
                     PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
@@ -159,7 +207,7 @@ jobs:
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
                   output=$(piper integrationArtifactUpdateConfiguration \
-                      --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
+                      --apiServiceKey "$API_KEY" \
                       --integrationFlowId "${{ matrix.iflow_id }}" \
                       --integrationFlowVersion "active" \
                       --parameterKey "$PARAM_NAME" \
@@ -185,6 +233,6 @@ jobs:
           
           echo "Configuration updated. Now deploying the iFlow..."
           piper integrationArtifactDeploy \
-            --apiServiceKey '${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}' \
+            --apiServiceKey "$API_KEY" \
             --integrationFlowId "${{ matrix.iflow_id }}" \
             --verbose true
