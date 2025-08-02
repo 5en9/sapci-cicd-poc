@@ -122,7 +122,7 @@ jobs:
         tenant: ${{ fromJSON(needs.determine_changes.outputs.tenants) }}
         env: ${{ fromJSON(needs.determine_changes.outputs.environments) }}
     
-    environment: ${{ matrix.tenant }}
+    environment: ${{ matrix.env }}
 
     env:
       SECRETS_CONTEXT: ${{ toJSON(secrets) }}
