@@ -72,7 +72,6 @@ jobs:
             --integrationFlowId ${{ inputs.iflow_id }}
             --integrationFlowName ${{ inputs.iflow_id }}
             --packageId ${{ env.CI_PACKAGE_ID }}
- }}
             --verbose true
 
       - name: Update Configuration and Deploy
