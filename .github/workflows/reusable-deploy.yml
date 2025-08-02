@@ -48,9 +48,7 @@ jobs:
         id: set_api_key_and_oauth
         run: |
           SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
-          echo "Debugging: SECRET_NAME is $SECRET_NAME"
           API_KEY_JSON=$(echo "$SECRETS_CONTEXT" | jq -r ."$SECRET_NAME")
-          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
           if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
             echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
             exit 1
@@ -74,9 +72,6 @@ jobs:
 
       - name: Check and Create Integration Package
         run: |
-          set -e # Exit immediately if a command exits with a non-zero status.
-          set -x # Print commands and their arguments as they are executed.
-
           PACKAGE_ID="${{ vars.CI_PACKAGE_ID }}"
           
           echo "Getting OAuth token..."
@@ -97,14 +92,11 @@ jobs:
           echo "Access token obtained."
 
           echo "Checking if Integration Package '$PACKAGE_ID' exists..."
-          # Use printf to ensure correct formatting of %{http_code}
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')" 2>&1)
-          CURL_EXIT_CODE=$?
+            "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')")
 
-          echo "HTTP Status Code: '$HTTP_CODE'"
-          echo "Curl Exit Code: '$CURL_EXIT_CODE'"
+          echo "HTTP Status Code: $HTTP_CODE"
 
           if [ "$HTTP_CODE" == "404" ]; then
             echo "Integration Package '$PACKAGE_ID' not found. Creating it..."
@@ -125,7 +117,7 @@ jobs:
           elif [ "$HTTP_CODE" == "200" ]; then
             echo "Integration Package '$PACKAGE_ID' already exists. Skipping creation."
           else
-            echo "Error: Unexpected HTTP status code '$HTTP_CODE' when checking Integration Package existence. Curl Exit Code: '$CURL_EXIT_CODE'"
+            echo "Error: Unexpected HTTP status code $HTTP_CODE when checking Integration Package existence."
             exit 1
           fi
 
@@ -186,7 +178,7 @@ jobs:
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
                   output=$(piper integrationArtifactUpdateConfiguration \
-                      --apiServiceKey "$API_KEY" \
+                      --apiServiceKey '$API_KEY' \
                       --integrationFlowId "${{ inputs.iflow_id }}" \
                       --integrationFlowVersion "active" \
                       --parameterKey "$PARAM_NAME" \
