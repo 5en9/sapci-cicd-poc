@@ -48,7 +48,9 @@ jobs:
         id: set_api_key_and_oauth
         run: |
           SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
+          echo "Debugging: SECRET_NAME is $SECRET_NAME"
           API_KEY_JSON=$(echo "$SECRETS_CONTEXT" | jq -r ."$SECRET_NAME")
+          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
           if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
             echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
             exit 1
@@ -176,7 +178,7 @@ jobs:
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
                   output=$(piper integrationArtifactUpdateConfiguration \
-                      --apiServiceKey "${{ env.API_KEY }}" \
+                      --apiServiceKey "$API_KEY" \
                       --integrationFlowId "${{ inputs.iflow_id }}" \
                       --integrationFlowVersion "active" \
                       --parameterKey "$PARAM_NAME" \
@@ -202,7 +204,7 @@ jobs:
           
           echo "Configuration updated. Now deploying the iFlow..."
           piper integrationArtifactDeploy \
-            --apiServiceKey "${{ env.API_KEY }}" \
+            --apiServiceKey "$API_KEY" \
             --integrationFlowId "${{ inputs.iflow_id }}" \
             --verbose true
 
