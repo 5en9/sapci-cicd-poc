@@ -62,7 +62,7 @@ jobs:
           BASE_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.url")
 
           echo "::add-mask::$CLIENT_ID"
-          echo "$CLIENT_SECRET"
+          echo "::add-mask::$CLIENT_SECRET"
           echo "::add-mask::$TOKEN_URL"
           echo "::add-mask::$BASE_URL"
           echo "::add-mask::$API_KEY_JSON" # Mask the whole JSON too
@@ -79,7 +79,9 @@ jobs:
           echo "Getting OAuth token..."
           TOKEN_RESPONSE=$(curl -v -s -X POST \
             -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=client_credentials&client_id=${{ env.CLIENT_ID }}&client_secret=${{ env.CLIENT_SECRET }}" \
+            -d "grant_type=client_credentials"\
+            -d "client_id=${{ env.CLIENT_ID }}"\
+            -d "client_secret=${{ env.CLIENT_SECRET }}" \
             "${{ env.TOKEN_URL }}")
           
           ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r ".access_token")
