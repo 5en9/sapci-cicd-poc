@@ -119,7 +119,6 @@ jobs:
     name: 🚀 Dispatch Deployment for ${{ matrix.iflow_id }}
     needs: [determine_changes, build]
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
