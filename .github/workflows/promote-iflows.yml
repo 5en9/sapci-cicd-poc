@@ -113,7 +113,7 @@ jobs:
           path: |
             iflows/${{ matrix.iflow_id }}
             config/
-          retention-days: 7
+          retention-days: 90
 
   dispatch_deployment:
     name: 🚀 Dispatch Deployment for ${{ matrix.iflow_id }}
