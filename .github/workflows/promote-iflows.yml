@@ -139,10 +139,6 @@ jobs:
           chmod +x piper
           echo "$(pwd)" >> $GITHUB_PATH
 
-      - name: Log Secrets Context
-        run: |
-          echo "Secrets Context: ${{ env.SECRETS_CONTEXT }}"
-
       - name: Set API Key
         id: set_api_key
         run: |
