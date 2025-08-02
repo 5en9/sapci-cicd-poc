@@ -11,6 +11,7 @@ jobs:
   download_and_create_branch:
     name: Download iFlow and Create PR
     runs-on: ubuntu-latest
+    environment: D
     permissions:
       contents: write
       pull-requests: write
@@ -24,6 +25,17 @@ jobs:
           distribution: 'sapmachine'
           java-version: '17'
       
+      - name: Set up yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Get Tenant from Config
+        id: get_tenant
+        run: |
+          TENANT=$(yq -r '.tenants[0]' config/deployment.yml | tr '[:lower:]' '[:upper:]')
+          echo "Selected Tenant: $TENANT"
+          echo "TENANT_NAME=$TENANT" >> $GITHUB_ENV
       - name: Download iFlow artifact from tenant
         id: download_iflow
         uses: SAP/project-piper-action@main
@@ -31,6 +43,7 @@ jobs:
           step-name: integrationArtifactDownload
           flags:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
+            --apiServiceKey ${{ secrets[format('CI_APISERVICEKEY_{0}', env.TENANT_NAME)] }}
             --integrationFlowId ${{ github.event.inputs.iflow_id }}
             --integrationFlowVersion active
             --downloadPath iflows/${{ github.event.inputs.iflow_id }}
