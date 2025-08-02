@@ -143,11 +143,12 @@ jobs:
         id: set_api_key
         run: |
           SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
-          API_KEY=$(echo $SECRETS_CONTEXT | jq -r ."$SECRET_NAME")
+          API_KEY=$(echo "$SECRETS_CONTEXT" | jq -r ."$SECRET_NAME")
           if [ -z "$API_KEY" ] || [ "$API_KEY" == "null" ]; then
             echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
             exit 1
           fi
+          echo "::add-mask::$API_KEY"
           echo "API_KEY=$API_KEY" >> $GITHUB_ENV
 
       - name: Create Zip Archive
@@ -160,7 +161,7 @@ jobs:
         uses: SAP/project-piper-action@main
         with:
           step-name: integrationArtifactUpload
-          flags:
+          flags: |
             --apiServiceKey ${{ env.API_KEY }}
             --filePath ${{ matrix.iflow_id }}.zip
             --integrationFlowId ${{ matrix.iflow_id }}
