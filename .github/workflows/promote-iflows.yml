@@ -70,7 +70,7 @@ jobs:
             TENANTS_JSON=$(echo "$TENANTS_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc .)
           elif [ -f "config/deployment.yml" ]; then
             echo "Using tenants from config/deployment.yml"
-            TENANTS_JSON=$(yq -o=json '.tenants' config/deployment.yml | jq -c .)
+            TENANTS_JSON=$(yq -o=json '.tenants' config/deployment.yml | jq -c '.')
           else
             echo "No tenant configuration found, using default tenant: a"
             TENANTS_JSON='["a"]'
@@ -80,7 +80,7 @@ jobs:
 
           if [ -f "config/deployment.yml" ]; then
             echo "Using environments from config/deployment.yml"
-            ENV_JSON=$(yq -o=json '.environments' config/deployment.yml | jq -c .)
+            ENV_JSON=$(yq -o=json '.environments' config/deployment.yml | jq -c '.')
           else
             echo "No environment configuration found, using default environments: d, y"
             ENV_JSON='["d", "y"]'
