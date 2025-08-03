@@ -103,9 +103,31 @@ jobs:
           fi
           echo "package_id=$PACKAGE_ID" >> $GITHUB_OUTPUT
 
+  build:
+    name: 📦 Build ${{ matrix.iflow_id }}
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false # Continue with other iFlows even if one fails
+      matrix:
+        iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Archive iFlow and Configs into an Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iflow-artifact-${{ matrix.iflow_id }} # Unique artifact per iFlow
+          path: |
+            iflows/${{ matrix.iflow_id }}
+            config/
+          retention-days: 90
+
   prepare_package:
     name: 📦 Prepare Integration Package for Tenant ${{ matrix.tenant }} and Env ${{ matrix.environment }}
-    needs: determine_changes
+    needs: [determine_changes, build]
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
     runs-on: ubuntu-latest
     strategy:
@@ -113,10 +135,6 @@ jobs:
       matrix:
         tenant: ${{ fromJSON(needs.determine_changes.outputs.tenants) }}
         environment: ${{ fromJSON(needs.determine_changes.outputs.environments) }}
-    outputs:
-      package_id: ${{ steps.get_package_id.outputs.package_id }}
-      tenant: ${{ matrix.tenant }}
-      environment: ${{ matrix.environment }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -126,25 +144,10 @@ jobs:
           sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
           sudo chmod +x /usr/bin/yq
 
-      - name: Get Package ID
-        id: get_package_id
-        run: |
-          PACKAGE_ID="${{ needs.determine_changes.outputs.package_id }}"
-          echo "package_id=$PACKAGE_ID" >> $GITHUB_OUTPUT
-
       - name: Set API Key and OAuth Details for Package Creation
         id: set_api_key_and_oauth_package
         run: |
-          # Assuming 'A' is the default tenant for package creation if not specified
-          # This needs to be robust for multi-tenant scenarios if package creation is tenant-specific
-          # For now, using the first tenant from the list or a default 'A'
-          TENANTS_JSON="${{ needs.determine_changes.outputs.tenants }}"
-          DEFAULT_TENANT=$(echo "$TENANTS_JSON" | jq -r '.[0]')
-          if [ -z "$DEFAULT_TENANT" ] || [ "$DEFAULT_TENANT" == "null" ]; then
-            DEFAULT_TENANT="A"
-          fi
-
-          SECRET_NAME="CI_APISERVICEKEY_${DEFAULT_TENANT}"
+          SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
           API_KEY_JSON=$(echo "${{ toJSON(secrets) }}" | jq -r ."$SECRET_NAME")
           echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
@@ -216,28 +219,6 @@ jobs:
             exit 1
           fi
 
-  build:
-    name: 📦 Build ${{ matrix.iflow_id }}
-    needs: [determine_changes, prepare_package]
-    if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false # Continue with other iFlows even if one fails
-      matrix:
-        iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
-    steps:
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
-
-      - name: Archive iFlow and Configs into an Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: iflow-artifact-${{ matrix.iflow_id }} # Unique artifact per iFlow
-          path: |
-            iflows/${{ matrix.iflow_id }}
-            config/
-          retention-days: 90
-
   dispatch_deployment:
     name: 🚀 Dispatch Deployment for ${{ matrix.iflow_id }}
     needs: [determine_changes, build, prepare_package]
@@ -249,7 +230,7 @@ jobs:
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       iflow_id: ${{ matrix.iflow_id }}
-      package_id: ${{ needs.prepare_package.outputs.package_id }}
+      package_id: ${{ needs.determine_changes.outputs.package_id }}
       tenants: ${{ needs.determine_changes.outputs.tenants }}
       environments: ${{ needs.determine_changes.outputs.environments }}
       test_environments: ${{ needs.determine_changes.outputs.test_environments }}
