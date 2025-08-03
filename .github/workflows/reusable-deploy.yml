@@ -118,7 +118,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
-      max-parallel: 1
       matrix:
         tenant: ${{ fromJSON(inputs.tenants) }}
         iflow_id: ${{ fromJSON(inputs.iflows) }}
