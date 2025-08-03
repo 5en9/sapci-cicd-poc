@@ -21,7 +21,7 @@ on:
 
 jobs:
   deploy:
-    name: 🚀 Deploy ${{ inputs.iflow_id }} to ${{ matrix.env }}-${{ matrix.tenant }}
+    name: 🚀 Deploy ${{ inputs.package_id }}-${{ inputs.iflow_id }} to ${{ matrix.env }}-${{ matrix.tenant }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -78,7 +78,7 @@ jobs:
 
       - name: Check and Create Integration Package
         run: |
-          PACKAGE_ID="${{ input.package_id }}"
+          PACKAGE_ID="${{ inputs.package_id }}"
           
           echo "Getting OAuth token..."
           TOKEN_RESPONSE=$(curl -s -X POST \
@@ -143,7 +143,7 @@ jobs:
             --filePath ${{ inputs.iflow_id }}.zip
             --integrationFlowId ${{ inputs.iflow_id }}
             --integrationFlowName ${{ inputs.iflow_id }}
-            --packageId ${{ input.package_id }}
+            --packageId ${{ inputs.package_id }}
             --verbose true
 
       - name: Update Configuration and Deploy
