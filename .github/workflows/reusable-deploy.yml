@@ -3,7 +3,7 @@ name: Reusable iFlow Deploy
 on:
   workflow_call:
     inputs:
-      iflow_id:
+      iflows:
         required: true
         type: string
       package_id:
@@ -12,7 +12,7 @@ on:
       tenants:
         required: true
         type: string
-      environments:
+      environment:
         required: true
         type: string
       test_environments:
@@ -21,16 +21,16 @@ on:
 
 jobs:
   deploy:
-    name: 🚀 Deploy ${{ inputs.package_id }}-${{ inputs.iflow_id }} to ${{ matrix.env }}-${{ matrix.tenant }}
+    name: Deploy ${{ inputs.package_id }} to ${{ inputs.environment }}-${{ matrix.tenant }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       max-parallel: 1
       matrix:
         tenant: ${{ fromJSON(inputs.tenants) }}
-        env: ${{ fromJSON(inputs.environments) }}
+        iflow_id: ${{ fromJSON(inputs.iflows) }}
     
-    environment: ${{ matrix.env }}
+    environment: ${{ inputs.environment }}
 
     env:
       SECRETS_CONTEXT: ${{ toJSON(secrets) }}
@@ -39,7 +39,7 @@ jobs:
       - name: Download Artifact
         uses: actions/download-artifact@v4
         with:
-            name: iflow-artifact-${{ inputs.iflow_id }}
+            name: iflow-artifact-${{ matrix.iflow_id }}
 
       - name: Download and Setup Piper
         run: |
@@ -49,8 +49,8 @@ jobs:
 
       - name: Create Zip Archive
         run: |
-          cd iflows/${{ inputs.iflow_id }}
-          zip -r ../../${{ inputs.iflow_id }}.zip .
+          cd iflows/${{ matrix.iflow_id }}
+          zip -r ../../${{ matrix.iflow_id }}.zip .
 
       - name: Upload iFlow
         id: deploy
@@ -59,9 +59,9 @@ jobs:
           step-name: integrationArtifactUpload
           flags: |
             --apiServiceKey ${{ env.API_KEY }}
-            --filePath ${{ inputs.iflow_id }}.zip
-            --integrationFlowId ${{ inputs.iflow_id }}
-            --integrationFlowName ${{ inputs.iflow_id }}
+            --filePath ${{ matrix.iflow_id }}.zip
+            --integrationFlowId ${{ matrix.iflow_id }}
+            --integrationFlowName ${{ matrix.iflow_id }}
             --packageId ${{ inputs.package_id }}
             --verbose true
 
@@ -70,9 +70,9 @@ jobs:
           API_KEY: ${{ env.API_KEY }}
         run: |
           # Define file paths
-          PROPDEF_FILE="iflows/${{ inputs.iflow_id }}/src/main/resources/parameters.propdef"
-          GLOBAL_CONFIG_FILE="config/parameters-${{ matrix.env }}.prop"
-          IFLOW_CONFIG_FILE="iflows/${{ inputs.iflow_id }}/src/main/resources/parameters-${{ matrix.env }}.prop"
+          PROPDEF_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters.propdef"
+          GLOBAL_CONFIG_FILE="config/parameters-${{ inputs.environment }}.prop"
+          IFLOW_CONFIG_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters-${{ inputs.environment }}.prop"
 
           # Check if the definition file exists. If not, there are no parameters to configure.
           if [ ! -f "$PROPDEF_FILE" ]; then
@@ -105,7 +105,7 @@ jobs:
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
                   output=$(piper integrationArtifactUpdateConfiguration \
                       --apiServiceKey '$API_KEY' \
-                      --integrationFlowId "${{ inputs.iflow_id }}" \
+                      --integrationFlowId "${{ matrix.iflow_id }}" \
                       --integrationFlowVersion "active" \
                       --parameterKey "$PARAM_NAME" \
                       --parameterValue "$PARAM_VALUE" \
@@ -131,11 +131,11 @@ jobs:
           echo "Configuration updated. Now deploying the iFlow..."
           piper integrationArtifactDeploy \
             --apiServiceKey "$API_KEY" \
-            --integrationFlowId "${{ inputs.iflow_id }}" \
+            --integrationFlowId "${{ matrix.iflow_id }}" \
             --verbose true
 
       - name: Automated Testing
-        if: contains(fromJSON(inputs.test_environments), matrix.env)
+        if: contains(fromJSON(inputs.test_environments), inputs.environment)
         run: |
-          echo "Running automated tests for environment ${{ matrix.env }}..."
+          echo "Running automated tests for environment ${{ inputs.environment }}..."
           # Add your testing commands here

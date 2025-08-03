@@ -125,114 +125,19 @@ jobs:
             config/
           retention-days: 90
 
-  prepare_package:
-    name: 📦 Prepare Integration Package for Tenant ${{ matrix.tenant }} and Env ${{ matrix.environment }}
+  dispatch_deployment:
+    name: 🚀 Dispatch Deployment to ${{ matrix.environment }}
     needs: [determine_changes, build]
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        tenant: ${{ fromJSON(needs.determine_changes.outputs.tenants) }}
         environment: ${{ fromJSON(needs.determine_changes.outputs.environments) }}
-    environment: ${{ matrix.environment }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up yq
-        run: |
-          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
-          sudo chmod +x /usr/bin/yq
-
-      - name: Set API Key and OAuth Details for Package Creation
-        id: set_api_key_and_oauth_package
-        run: |
-          SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
-          echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
-          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
-          if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
-            echo "Error: Secret $SECRET_NAME not found for tenant $DEFAULT_TENANT."
-            exit 1
-          fi
-          
-          CLIENT_ID=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientid")
-          CLIENT_SECRET=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientsecret")
-          TOKEN_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.tokenurl")
-          BASE_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.url")
-
-          echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
-          echo "CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
-          echo "TOKEN_URL=$TOKEN_URL" >> $GITHUB_ENV
-          echo "BASE_URL=$BASE_URL" >> $GITHUB_ENV
-          echo "API_KEY=$API_KEY_JSON" >> $GITHUB_ENV # This line sets the API_KEY environment variable
-
-      - name: Check and Create Integration Package
-        run: |
-          PACKAGE_ID="${{ needs.determine_changes.outputs.package_id }}"
-          
-          echo "Getting OAuth token..."
-          TOKEN_RESPONSE=$(curl -s -X POST \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=client_credentials" \
-            -d 'client_id=${{ env.CLIENT_ID }}' \
-            -d 'client_secret=${{ env.CLIENT_SECRET }}' \
-            "${{ env.TOKEN_URL }}")
-          
-          ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r ".access_token")
-          if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" == "null" ]; then
-            echo "Error: Failed to obtain access token."
-            echo "Response: $TOKEN_RESPONSE"
-            exit 1
-          fi
-          echo "::add-mask::$ACCESS_TOKEN" # Mask the access token
-          echo "Access token obtained."
-
-          echo "Checking if Integration Package '$PACKAGE_ID' exists..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer $ACCESS_TOKEN" \
-            "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')")
-
-          echo "HTTP Status Code: $HTTP_CODE"
-
-          if [ "$HTTP_CODE" == "404" ]; then
-            echo "Integration Package '$PACKAGE_ID' not found. Creating it..."
-            CREATE_RESPONSE=$(curl -s -X POST \
-              -H "Authorization: Bearer $ACCESS_TOKEN" \
-              -H "Content-Type: application/json" \
-              -H "Accept: application/json" \
-              -d "{\"Id\": \"$PACKAGE_ID\", \"Name\": \"$PACKAGE_ID\", \"ShortText\": \"Automatically created by CI/CD pipeline\"}" \
-              "${{ env.BASE_URL }}/api/v1/IntegrationPackages")
-            
-            echo "Create Package Response: $CREATE_RESPONSE"
-            
-            if echo "$CREATE_RESPONSE" | jq -e ".d.Id" > /dev/null; then
-              echo "Integration Package '$PACKAGE_ID' created successfully."
-            else
-              echo "Error: Failed to create Integration Package '$PACKAGE_ID'."
-              exit 1
-            fi
-          elif [ "$HTTP_CODE" == "200" ]; then
-            echo "Integration Package '$PACKAGE_ID' already exists. Skipping creation."
-          else
-            echo "Error: Unexpected HTTP status code '$HTTP_CODE' when checking Integration Package existence."
-            exit 1
-          fi
-
-  dispatch_deployment:
-    name: 🚀 Dispatch Deployment for ${{ matrix.iflow_id }}
-    needs: [determine_changes, build, prepare_package]
-    if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
     uses: ./.github/workflows/reusable-deploy.yml
     with:
-      iflow_id: ${{ matrix.iflow_id }}
+      iflows: ${{ needs.determine_changes.outputs.iflows }}
       package_id: ${{ needs.determine_changes.outputs.package_id }}
       tenants: ${{ needs.determine_changes.outputs.tenants }}
-      environments: ${{ needs.determine_changes.outputs.environments }}
+      environment: ${{ matrix.environment }}
       test_environments: ${{ needs.determine_changes.outputs.test_environments }}
     secrets: inherit
