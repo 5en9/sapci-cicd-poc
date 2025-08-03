@@ -133,7 +133,6 @@ jobs:
       fail-fast: false
       matrix:
         environment: ${{ fromJSON(needs.determine_changes.outputs.environments) }}
-    environment: ${{ matrix.environment }}
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       iflows: ${{ needs.determine_changes.outputs.iflows }}

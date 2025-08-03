@@ -27,6 +27,7 @@ jobs:
       fail-fast: false
       matrix:
         tenant: ${{ fromJSON(inputs.tenants) }}
+    environment: ${{ inputs.environment }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -123,7 +124,7 @@ jobs:
         iflow_id: ${{ fromJSON(inputs.iflows) }}
     env:
       SECRETS_CONTEXT: ${{ toJSON(secrets) }}
-
+    environment: ${{ inputs.environment }}
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@v4
