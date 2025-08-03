@@ -113,7 +113,7 @@ jobs:
           fi
 
   deploy:
-    name: 🚀 Deploy ${{ inputs.package_id }} to ${{ inputs.environment }}-${{ matrix.tenant }}
+    name: 🚀 Deploy ${{ matrix.iflow_id }} to ${{ matrix.tenant }}
     needs: prepare_package
     runs-on: ubuntu-latest
     strategy:
@@ -145,6 +145,14 @@ jobs:
           cd iflows/${{ matrix.iflow_id }}
           zip -r ../../${{ matrix.iflow_id }}.zip .
 
+      - name: Set API Key and OAuth Details for Package Creation
+        id: set_api_key_and_oauth_package
+        run: |
+          SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
+          echo "Debugging: SECRET_NAME is $SECRET_NAME"
+          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
+          echo "API_KEY=$API_KEY_JSON" >> $GITHUB_ENV # This line sets the API_KEY environment variable
+
       - name: Upload iFlow
         id: deploy
         uses: SAP/project-piper-action@main
@@ -159,8 +167,6 @@ jobs:
             --verbose true
 
       - name: Update Configuration and Deploy
-        env:
-          API_KEY: ${{ env.API_KEY }}
         run: |
           # Define file paths
           PROPDEF_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters.propdef"
@@ -197,7 +203,7 @@ jobs:
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
                   output=$(piper integrationArtifactUpdateConfiguration \
-                      --apiServiceKey '$API_KEY' \
+                      --apiServiceKey '${{ env.API_KEY }}' \
                       --integrationFlowId "${{ matrix.iflow_id }}" \
                       --integrationFlowVersion "active" \
                       --parameterKey "$PARAM_NAME" \
@@ -223,7 +229,7 @@ jobs:
           
           echo "Configuration updated. Now deploying the iFlow..."
           piper integrationArtifactDeploy \
-            --apiServiceKey "$API_KEY" \
+            --apiServiceKey '${{ env.API_KEY }}' \
             --integrationFlowId "${{ matrix.iflow_id }}" \
             --verbose true
 
