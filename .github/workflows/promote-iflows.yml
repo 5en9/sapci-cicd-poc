@@ -135,6 +135,7 @@ jobs:
       matrix:
         tenant: ${{ fromJSON(needs.determine_changes.outputs.tenants) }}
         environment: ${{ fromJSON(needs.determine_changes.outputs.environments) }}
+    environment: ${{ matrix.env }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
