@@ -1,3 +1,4 @@
+package_id: package1
 tenants:
   - A
 environments:

@@ -28,6 +28,7 @@ jobs:
       tenants: ${{ steps.get_config.outputs.tenants }}
       environments: ${{ steps.get_config.outputs.environments }}
       test_environments: ${{ steps.get_config.outputs.test_environments }}
+      package_id: ${{ steps.get_config.outputs.package_id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -93,6 +94,15 @@ jobs:
           echo "Test environments (JSON): $TEST_ENV_JSON"
           echo "test_environments=$TEST_ENV_JSON" >> $GITHUB_OUTPUT
 
+          if [ -f "config/deployment.yml" ]; then
+            echo "Using package_id from config/deployment.yml"
+            PACKAGE_ID=$(yq -r '.package_id' config/deployment.yml)
+          else
+            echo "No package_id configuration found, using default packageId: CI_PACKAGE_ID"
+            PACKAGE_ID="CI_PACKAGE_ID"
+          fi
+          echo "package_id=$PACKAGE_ID" >> $GITHUB_OUTPUT
+
   build:
     name: 📦 Build ${{ matrix.iflow_id }}
     needs: determine_changes
@@ -121,11 +131,13 @@ jobs:
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
     uses: ./.github/workflows/reusable-deploy.yml
     with:
       iflow_id: ${{ matrix.iflow_id }}
+      package_id: ${{ needs.determine_changes.outputs.package_id }}
       tenants: ${{ needs.determine_changes.outputs.tenants }}
       environments: ${{ needs.determine_changes.outputs.environments }}
       test_environments: ${{ needs.determine_changes.outputs.test_environments }}
