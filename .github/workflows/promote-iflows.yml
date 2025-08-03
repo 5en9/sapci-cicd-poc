@@ -150,7 +150,7 @@ jobs:
         run: |
           SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          API_KEY_JSON=$(echo "${{ toJSON(secrets) }}" | jq -r ."$SECRET_NAME")
+          API_KEY_JSON=$(echo "'${{ toJSON(secrets) }}'" | jq -r ."$SECRET_NAME")
           echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
           if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
             echo "Error: Secret $SECRET_NAME not found for tenant $DEFAULT_TENANT."
