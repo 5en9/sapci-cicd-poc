@@ -131,7 +131,6 @@ jobs:
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
     strategy:
       fail-fast: false
-      max-parallel: 1
       matrix:
         iflow_id: ${{ fromJSON(needs.determine_changes.outputs.iflows) }}
     uses: ./.github/workflows/reusable-deploy.yml
