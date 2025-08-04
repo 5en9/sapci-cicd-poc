@@ -83,7 +83,7 @@ jobs:
             API_URL="${{ env.BASE_URL }}/api/v1/IntegrationPackages('$PACKAGE_ID')/IntegrationDesigntimeArtifacts"
             echo "Fetching iFlows from $API_URL"
 
-            HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json \
+            HTTP_CODE=$(curl -s -w "%{\http_code}" -o response.json \
               -H "Authorization: Bearer $ACCESS_TOKEN" \
               -H "Accept: application/json" \
               "$API_URL")
@@ -123,6 +123,10 @@ jobs:
 
       - name: Download iFlow artifacts
         run: |
+          if [ ! -d "iflows" ]; then
+            mkdir iflows
+          fi
+          
           if [ -z "${{ inputs.tenant }}" ]; then
             TENANT=$(yq -r '.tenants[0]' config/deployment.yml)
             echo "Tenant input not provided. Using first tenant from deployment.yml: $TENANT"
