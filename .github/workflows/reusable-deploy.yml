@@ -21,12 +21,14 @@ on:
 
 jobs:
   prep_environment:
-    name: Prepare environment for sub-sequence step
+    name: Prepare environment
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
       secrets: ${{ steps.get_secrets.outputs.secrets }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Get Secrets
         id: get_secrets
         run: |
