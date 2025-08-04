@@ -102,8 +102,9 @@ jobs:
             echo "Found iFlows: $IFLOW_IDS"
             echo "iflows=$IFLOW_IDS" >> $GITHUB_OUTPUT
           else
-            echo "Using provided iFlows: ${{ inputs.iflow_id }}"
-            echo "iflows=${{ inputs.iflow_id }}" >> $GITHUB_OUTPUT
+            IFLOW_IDS=$(echo "${{ inputs.iflow_id }}" | sed 's/ //g' | tr ',' '\n')
+            echo "Using provided iFlows: $IFLOW_IDS"
+            echo "iflows=$IFLOW_IDS" >> $GITHUB_OUTPUT
           fi
 
   download_artifacts:
