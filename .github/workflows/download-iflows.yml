@@ -61,7 +61,7 @@ jobs:
         id: get_iflows
         run: |
           PACKAGE_ID=$(yq -r '.package_id' config/deployment.yml)
-          if [ "${{ inputs.iflows }}" == "all" ]; then
+          if [ "${{ inputs.iflow_id}}" == "all" ]; then
             echo "Getting all iFlows for package $PACKAGE_ID"
 
             echo "Getting OAuth token..."
@@ -98,8 +98,8 @@ jobs:
             echo "Found iFlows: $IFLOW_IDS"
             echo "iflows=$IFLOW_IDS" >> $GITHUB_OUTPUT
           else
-            echo "Using provided iFlows: ${{ inputs.iflows }}"
-            echo "iflows=${{ inputs.iflows }}" >> $GITHUB_OUTPUT
+            echo "Using provided iFlows: ${{ inputs.iflow_id }}"
+            echo "iflows=${{ inputs.iflow_id }}" >> $GITHUB_OUTPUT
           fi
 
   download_artifacts:
