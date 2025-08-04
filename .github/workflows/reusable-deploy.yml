@@ -52,7 +52,7 @@ jobs:
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
           # Use bash indirect expansion to get the secret's value from the env
           # and write it to the job's GITHUB_ENV file for subsequent steps.
-          echo "API_KEY=toJSON(${!SECRET_NAME})" >> $GITHUB_ENV
+          echo "API_KEY=${!SECRET_NAME}" >> $GITHUB_ENV
           echo "Debugging: API_KEY is ::add-mask::$API_KEY"        
           CLIENT_ID=$(echo "$API_KEY" | jq -r ".oauth.clientid")
           CLIENT_SECRET=$(echo "$API_KEY" | jq -r ".oauth.clientsecret")
