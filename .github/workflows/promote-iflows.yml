@@ -18,10 +18,14 @@ on:
         description: 'Comma-separated list of tenants to deploy to (e.g., A,B,C). If not provided, will use config/deployment.yml.'
         required: false
         type: string
+      environments:
+        description: 'Comma-separated list of environments to deploy to (e.g., D,Y). If not provided, will use config/deployment.yml.'
+        required: false
+        type: string
 
 jobs:
   determine_changes:
-    name: 🔎 Determine Scope
+    name: 🔎 Determine Scope
     runs-on: ubuntu-latest
     outputs:
       iflows: ${{ steps.get_changes.outputs.iflows }}
@@ -80,17 +84,27 @@ jobs:
           echo "Tenants for deployment (JSON): $TENANTS_JSON"
           echo "tenants=$TENANTS_JSON" >> $GITHUB_OUTPUT
 
-          if [ -f "config/deployment.yml" ]; then
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.environments }}" ]; then
+            ENVIRONMENTS_INPUT="${{ github.event.inputs.environments }}"
+            echo "Using environments from workflow dispatch: $ENVIRONMENTS_INPUT"
+            ENV_JSON=$(echo "$ENVIRONMENTS_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc . | tr '[:lower:]' '[:upper:]')
+          elif [ -f "config/deployment.yml" ]; then
             echo "Using environments from config/deployment.yml"
             ENV_JSON=$(yq -o=json '.environments' config/deployment.yml | jq -c '.' | tr '[:lower:]' '[:upper:]')
-            TEST_ENV_JSON=$(yq -o=json '.test_environments' config/deployment.yml | jq -c '.' | tr '[:lower:]' '[:upper:]')
           else
             echo "No environment configuration found, using default environments: D, Y"
             ENV_JSON='["D", "Y"]'
-            TEST_ENV_JSON='["Y"]'
           fi
           echo "Environments for deployment (JSON): $ENV_JSON"
           echo "environments=$ENV_JSON" >> $GITHUB_OUTPUT
+
+          if [ -f "config/deployment.yml" ]; then
+            echo "Using test_environments from config/deployment.yml"
+            TEST_ENV_JSON=$(yq -o=json '.test_environments' config/deployment.yml | jq -c '.' | tr '[:lower:]' '[:upper:]')
+          else
+            echo "No environment configuration found, using default test_environments: Y"
+            TEST_ENV_JSON='["Y"]'
+          fi
           echo "Test environments (JSON): $TEST_ENV_JSON"
           echo "test_environments=$TEST_ENV_JSON" >> $GITHUB_OUTPUT
 
@@ -104,7 +118,7 @@ jobs:
           echo "package_id=$PACKAGE_ID" >> $GITHUB_OUTPUT
 
   build:
-    name: 📦 Build ${{ matrix.iflow_id }}
+    name: 📦 Build ${{ matrix.iflow_id }}
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
     runs-on: ubuntu-latest
@@ -126,7 +140,7 @@ jobs:
           retention-days: 90
 
   dispatch_deployment:
-    name: 🚀 Dispatch Deployment to env:${{ matrix.environment }}
+    name: 🚀 Dispatch Deployment to env:${{ matrix.environment }}
     needs: [determine_changes, build]
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
     strategy:
