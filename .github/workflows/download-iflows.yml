@@ -123,10 +123,6 @@ jobs:
 
       - name: Download iFlow artifacts
         run: |
-          if [ ! -d "iflows" ]; then
-            mkdir iflows
-          fi
-          
           if [ -z "${{ inputs.tenant }}" ]; then
             TENANT=$(yq -r '.tenants[0]' config/deployment.yml)
             echo "Tenant input not provided. Using first tenant from deployment.yml: $TENANT"
@@ -149,7 +145,7 @@ jobs:
             piper integrationArtifactDownload \
               --apiServiceKey "$API_KEY_JSON" \
               --integrationFlowId "$iflow_id" \
-              --integrationFlowVersion "active"
+              --integrationFlowVersion "active" \
               --downloadPath "iflows/$iflow_id"
             
             TARGET_DIR="iflows/$iflow_id"
