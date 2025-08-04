@@ -27,12 +27,10 @@ jobs:
     outputs:
       secrets: ${{ steps.get_secrets.outputs.secrets }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
       - name: Get Secrets
         id: get_secrets
         run: |
-          echo 'secrets=${{ toJSON(secrets) }}' >> $GITHUB_OUTPUT    
+          echo "secrets=$(echo '${{ toJSON(secrets) }}' | jq 'del(.github_token)')" >> $GITHUB_OUTPUT
 
   prepare_package:
     name: 📦 Prepare Integration Package for Tenant ${{ matrix.tenant }}
