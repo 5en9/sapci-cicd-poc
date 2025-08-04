@@ -48,16 +48,16 @@ jobs:
       - name: Set API Key and OAuth Details for Package Creation
         id: set_api_key_and_oauth_package
         run: |
+          # Get Secret base on environment and tenant. Secret is store on repository on the format CI_APISERVICEKEY_<environment>_<tenant>
           SECRET_NAME="CI_APISERVICEKEY_${{ inputs.environment }}_${{ matrix.tenant }}"
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          # Use bash indirect expansion to get the secret's value from the env
-          # and write it to the job's GITHUB_ENV file for subsequent steps.
-          echo "API_KEY=${!SECRET_NAME}" >> $GITHUB_ENV
-          echo "Debugging: API_KEY is ::add-mask::$API_KEY"        
-          CLIENT_ID=$(echo "$API_KEY" | jq -r ".oauth.clientid")
-          CLIENT_SECRET=$(echo "$API_KEY" | jq -r ".oauth.clientsecret")
-          TOKEN_URL=$(echo "$API_KEY" | jq -r ".oauth.tokenurl")
-          BASE_URL=$(echo "$API_KEY" | jq -r ".oauth.url")
+          API_KEY_JSON=$(echo ${{ toJSON(secrets) }} | jq -r ."$SECRET_NAME")
+
+          echo "Debugging: API_KEY is ::add-mask::$API_KEY_JSON"        
+          CLIENT_ID=$(echo "$$API_KEY_JSON" | jq -r ".oauth.clientid")
+          CLIENT_SECRET=$(echo "$$API_KEY_JSON" | jq -r ".oauth.clientsecret")
+          TOKEN_URL=$(echo "$$API_KEY_JSON" | jq -r ".oauth.tokenurl")
+          BASE_URL=$(echo "$$API_KEY_JSON" | jq -r ".oauth.url")
 
           echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
           echo "CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
