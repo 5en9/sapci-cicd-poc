@@ -1,7 +1,7 @@
 name: Download iFlows
 
 on:
-  workflow_call:
+  workflow_dispatch: # Allows manual runs
     inputs:
       iflow_id:
         description: 'Comma-separated list of iFlow IDs to deploy, or "all" to download all iFlows.'
