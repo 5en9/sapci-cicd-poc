@@ -154,6 +154,7 @@ jobs:
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
           API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
           echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
+          echo "API_KEY_JSON=$API_KEY_JSON" >> $GITHUB_ENV # This line sets the API_KEY_JSON environment variable
 
       - name: Upload iFlow
         id: deploy
