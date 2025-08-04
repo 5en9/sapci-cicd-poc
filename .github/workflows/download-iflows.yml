@@ -11,6 +11,10 @@ on:
         description: Tenant to download. If not provided, will use config/deployment.yml.'
         required: false
         type: string
+      branch_name:
+        description: 'Optional: The name of the branch to create.'
+        required: false
+        type: string
 
 jobs:
   determine_iflows:
@@ -123,6 +127,10 @@ jobs:
 
       - name: Download iFlow artifacts
         run: |
+          if [ ! -d "iflows" ]; then
+            mkdir iflows
+          fi
+          
           if [ -z "${{ inputs.tenant }}" ]; then
             TENANT=$(yq -r '.tenants[0]' config/deployment.yml)
             echo "Tenant input not provided. Using first tenant from deployment.yml: $TENANT"
@@ -158,10 +166,14 @@ jobs:
       - name: Create Branch
         id: create_branch
         run: |
+          BRANCH_NAME=${{ inputs.branch_name }}
+          if [ -z "$BRANCH_NAME" ]; then
+            BRANCH_NAME="sync/iflow-${{ inputs.iflow_id }}"
+          fi
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git checkout -b "sync/iflow-${{ inputs.iflow_id }}"
+          git checkout -b "$BRANCH_NAME"
           
           git add .
           git commit -m "feat: Sync iFlow ${{ inputs.iflow_id }}"
-          git push origin "sync/iflow-${{ inputs.iflow_id }}" --force
+          git push origin "$BRANCH_NAME" --force
