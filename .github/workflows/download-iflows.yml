@@ -145,6 +145,7 @@ jobs:
             piper integrationArtifactDownload \
               --apiServiceKey "$API_KEY_JSON" \
               --integrationFlowId "$iflow_id" \
+              --integrationFlowVersion "active"
               --downloadPath "iflows/$iflow_id"
             
             TARGET_DIR="iflows/$iflow_id"
