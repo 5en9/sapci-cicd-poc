@@ -52,12 +52,15 @@ jobs:
           SECRET_NAME="CI_APISERVICEKEY_${{ inputs.environment }}_${{ matrix.tenant }}"
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
           API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
-
-          echo "Debugging: API_KEY is ::add-mask::$API_KEY_JSON"        
-          CLIENT_ID=$(echo "$$API_KEY_JSON" | jq -r ".oauth.clientid")
-          CLIENT_SECRET=$(echo "$$API_KEY_JSON" | jq -r ".oauth.clientsecret")
-          TOKEN_URL=$(echo "$$API_KEY_JSON" | jq -r ".oauth.tokenurl")
-          BASE_URL=$(echo "$$API_KEY_JSON" | jq -r ".oauth.url")
+          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
+          if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
+            echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
+            exit 1
+          fi        
+          CLIENT_ID=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientid")
+          CLIENT_SECRET=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientsecret")
+          TOKEN_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.tokenurl")
+          BASE_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.url")
 
           echo "CLIENT_ID=$CLIENT_ID" >> $GITHUB_ENV
           echo "CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
