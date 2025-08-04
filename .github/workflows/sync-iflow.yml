@@ -1,0 +1,78 @@
+name: Download iFlow and Create Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      iflow_id:
+        description: 'The technical ID of the iFlow to download'
+        required: true
+        type: string
+jobs:
+  download_and_create_branch:
+    name: Download iFlow and Create PR
+    runs-on: ubuntu-latest
+    environment: D
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'sapmachine'
+          java-version: '17'
+      
+      - name: Set up yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Get Tenant from Config
+        id: get_tenant
+        run: |
+          TENANT=$(yq -r '.tenants[0]' config/deployment.yml | tr '[:lower:]' '[:upper:]')
+          echo "Selected Tenant: $TENANT"
+          echo "TENANT_NAME=$TENANT" >> $GITHUB_ENV
+      - name: Download iFlow artifact from tenant
+        id: download_iflow
+        uses: SAP/project-piper-action@main
+        with:
+          step-name: integrationArtifactDownload
+          flags:
+            --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
+            --apiServiceKey ${{ secrets[format('CI_APISERVICEKEY_{0}', env.TENANT_NAME)] }}
+            --integrationFlowId ${{ github.event.inputs.iflow_id }}
+            --integrationFlowVersion active
+            --downloadPath iflows/${{ github.event.inputs.iflow_id }}
+      - name: Unzip iFlow Artifact
+        run: |
+          IFLOW_ID=${{ github.event.inputs.iflow_id }}
+          TARGET_DIR="iflows/$IFLOW_ID"
+          ZIP_FILE="$TARGET_DIR/$IFLOW_ID.zip"
+          
+          echo "Unzipping $ZIP_FILE to $TARGET_DIR"
+          # Unzip the file, overwriting existing files without prompting (-o)
+          unzip -o "$ZIP_FILE" -d "$TARGET_DIR"
+          
+          # Clean up by removing the original .zip file
+          rm "$ZIP_FILE"
+      - name: Clean up Piper Binary
+        run: |
+          echo "Searching for and removing Piper binary directory..."
+          rm -rf v*
+          echo "Cleanup complete."
+          
+      - name: Create Branch
+        id: create_branch
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git checkout -b "sync/iflow-${{ github.event.inputs.iflow_id }}"
+          
+          git add .
+          git commit -m "feat: Sync iFlow ${{ github.event.inputs.iflow_id }}"
+          git push origin "sync/iflow-${{ github.event.inputs.iflow_id }}" --force
+          

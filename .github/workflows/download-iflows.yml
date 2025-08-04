@@ -3,59 +3,49 @@ name: Download iFlows
 on:
   workflow_call:
     inputs:
-      iflows:
+      iflow_id:
+        description: 'Comma-separated list of iFlow IDs to deploy, or "all" to download all iFlows.'
         required: true
         type: string
-      package_id:
-        required: true
-        type: string
-      tenants:
-        required: true
-        type: string
-      environment:
-        required: true
+      tenant:
+        description: Tenant to download. If not provided, will use config/deployment.yml.'
+        required: false
         type: string
 
 jobs:
-  prep_environment:
-    name: Approve download for ${{ inputs.environment }}
-    runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
-    steps:
-      - run: echo "This job is a placeholder for environment approval."
-
-  get_secrets:
-    name: Get secrets
-    runs-on: ubuntu-latest
-    needs: prep_environment
-    outputs:
-      secrets: ${{ steps.get_secrets.outputs.secrets }}
-    steps:
-      - name: Get Secrets
-        id: get_secrets
-        run: |
-          echo "secrets=$(echo '${{ toJSON(secrets) }}' | jq -c 'del(.github_token)')" >> $GITHUB_OUTPUT
-
   determine_iflows:
     name: Determine iFlows to download
     runs-on: ubuntu-latest
-    needs: get_secrets
     outputs:
       iflows: ${{ steps.get_iflows.outputs.iflows }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+  
       - name: Set API Key and OAuth Details
         id: set_api_key_and_oauth
         run: |
-          # Use the first tenant to get credentials for the API call
-          FIRST_TENANT=$(echo '${{ inputs.tenants }}' | jq -r 'sort | .[0]')
-          SECRET_NAME="CI_APISERVICEKEY_$FIRST_TENANT"
-          API_KEY_JSON=$(echo '${{ needs.get_secrets.outputs.secrets }}' | jq -r ."$SECRET_NAME")
-
-          if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
-            echo "Error: Secret $SECRET_NAME not found for tenant $FIRST_TENANT."
-            exit 1
+          if [ -z "${{ inputs.tenant }}" ]; then
+            TENANT=$(yq -r '.tenants[0]' config/deployment.yml)
+            echo "Tenant input not provided. Using first tenant from deployment.yml: $TENANT"
+          else
+            TENANT="${{ inputs.tenant }}"
+            echo "Using provided tenant: $TENANT"
           fi
-
+          
+          SECRET_NAME="CI_APISERVICEKEY_D_$TENANT"
+          echo "Debugging: SECRET_NAME is $SECRET_NAME"
+          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
+          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
+          if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
+            echo "Error: Secret $SECRET_NAME not found for tenant $TENANT."
+            exit 1
+          fi        
           CLIENT_ID=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientid")
           CLIENT_SECRET=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientsecret")
           TOKEN_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.tokenurl")
@@ -65,12 +55,14 @@ jobs:
           echo "CLIENT_SECRET=$CLIENT_SECRET" >> $GITHUB_ENV
           echo "TOKEN_URL=$TOKEN_URL" >> $GITHUB_ENV
           echo "BASE_URL=$BASE_URL" >> $GITHUB_ENV
+          echo "API_KEY=$API_KEY_JSON" >> $GITHUB_ENV # This line sets the API_KEY environment variable
 
       - name: Get iFlows list
         id: get_iflows
         run: |
+          PACKAGE_ID=$(yq -r '.package_id' config/deployment.yml)
           if [ "${{ inputs.iflows }}" == "all" ]; then
-            echo "Getting all iFlows for package ${{ inputs.package_id }}"
+            echo "Getting all iFlows for package $PACKAGE_ID"
 
             echo "Getting OAuth token..."
             TOKEN_RESPONSE=$(curl -s -X POST \
@@ -88,7 +80,7 @@ jobs:
             fi
             echo "Access token obtained."
 
-            API_URL="${{ env.BASE_URL }}/api/v1/IntegrationPackages('${{ inputs.package_id }}')/IntegrationDesigntimeArtifacts?%24format=json"
+            API_URL="${{ env.BASE_URL }}/api/v1/IntegrationPackages('$PACKAGE_ID')/IntegrationDesigntimeArtifacts"
             echo "Fetching iFlows from $API_URL"
 
             HTTP_CODE=$(curl -s -w "%{\http_code}" -o response.json \
