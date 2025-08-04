@@ -25,12 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     outputs:
-      secrets: ${{ steps.get_secrets.outputs.secrets }}
+      apikeys: ${{ steps.get_secrets.outputs.apikeys }}
     steps:
       - name: Get Secrets
         id: get_secrets
         run: |
-          echo "secrets=$(echo '${{ toJSON(secrets) }}' | jq -c 'del(.github_token)')" >> $GITHUB_OUTPUT
+          echo "apikeys=$(echo '${{ toJSON(secrets) }}' | jq -c 'del(.github_token)')" >> $GITHUB_OUTPUT
 
   prepare_package:
     name: 📦 Prepare Integration Package for Tenant ${{ matrix.tenant }}
@@ -54,8 +54,8 @@ jobs:
         run: |
           SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          echo "Debugging: secrets are ${{ toJSON(needs.prep_environment.outputs.secrets) }}"
-          API_KEY_JSON=$(echo ${{ toJSON(needs.prep_environment.outputs.secrets) }} | jq -r ."$SECRET_NAME")
+          echo "Debugging: secrets are ${{ toJSON(needs.prep_environment.outputs.apikeys) }}"
+          API_KEY_JSON=$(echo ${{ toJSON(needs.prep_environment.outputs.apikeys) }} | jq -r ."$SECRET_NAME")
           echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
           if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
             echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
