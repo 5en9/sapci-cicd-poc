@@ -29,7 +29,7 @@ jobs:
 
 
   prepare_package:
-    name: Prepare Integration Package for Tenant ${{ matrix.tenant }}
+    name: Tenant ${{ matrix.tenant }}:Prepare Package 
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -121,7 +121,7 @@ jobs:
           fi
 
   deploy:
-    name: Deploy ${{ matrix.iflow_id }} to ${{ matrix.tenant }}
+    name: Tenant ${{ matrix.tenant }}:Deploy ${{ matrix.iflow_id }}
     needs: prepare_package
     runs-on: ubuntu-latest
     strategy:

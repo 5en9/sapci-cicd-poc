@@ -21,7 +21,7 @@ on:
 
 jobs:
   determine_changes:
-    name: 🔎 Determine Changed iFlows and Tenants
+    name: 🔎 Determine Scope
     runs-on: ubuntu-latest
     outputs:
       iflows: ${{ steps.get_changes.outputs.iflows }}
@@ -126,7 +126,7 @@ jobs:
           retention-days: 90
 
   dispatch_deployment:
-    name: 🚀 Dispatch Deployment to ${{ matrix.environment }}
+    name: 🚀 Dispatch Deployment to env:${{ matrix.environment }}
     needs: [determine_changes, build]
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
     strategy:
