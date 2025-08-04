@@ -129,8 +129,6 @@ jobs:
       matrix:
         tenant: ${{ fromJSON(inputs.tenants) }}
         iflow_id: ${{ fromJSON(inputs.iflows) }}
-    env:
-      SECRETS_CONTEXT: ${{ toJSON(secrets) }}
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@v4
@@ -148,13 +146,14 @@ jobs:
           cd iflows/${{ matrix.iflow_id }}
           zip -r ../../${{ matrix.iflow_id }}.zip .
 
-      - name: Set API Key and OAuth Details for Package Creation
-        id: set_api_key_and_oauth_package
+      - name: Set API Key
+        id: set_api_key
         run: |
-          SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
+          # Get Secret base on environment and tenant. Secret is store on repository on the format CI_APISERVICEKEY_<environment>_<tenant>
+          SECRET_NAME="CI_APISERVICEKEY_${{ inputs.environment }}_${{ matrix.tenant }}"
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          API_KEY_JSON=$(echo ${{ toJSON(needs.get_secrets.outputs.secrets) }} | jq -r ."$SECRET_NAME")
-          echo "API_KEY=$API_KEY_JSON" >> $GITHUB_ENV # This line sets the API_KEY environment variable
+          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
+          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
 
       - name: Upload iFlow
         id: deploy
@@ -162,7 +161,7 @@ jobs:
         with:
           step-name: integrationArtifactUpload
           flags: |
-            --apiServiceKey ${{ env.API_KEY }}
+            --apiServiceKey ${{ env.API_KEY_JSON }}
             --filePath ${{ matrix.iflow_id }}.zip
             --integrationFlowId ${{ matrix.iflow_id }}
             --integrationFlowName ${{ matrix.iflow_id }}
@@ -206,7 +205,7 @@ jobs:
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
                   output=$(piper integrationArtifactUpdateConfiguration \
-                      --apiServiceKey '${{ env.API_KEY }}' \
+                      --apiServiceKey '${{ env.API_KEY_JSON }}' \
                       --integrationFlowId "${{ matrix.iflow_id }}" \
                       --integrationFlowVersion "active" \
                       --parameterKey "$PARAM_NAME" \
@@ -232,7 +231,7 @@ jobs:
           
           echo "Configuration updated. Now deploying the iFlow..."
           piper integrationArtifactDeploy \
-            --apiServiceKey '${{ env.API_KEY }}' \
+            --apiServiceKey '${{ env.API_KEY_JSON }}' \
             --integrationFlowId "${{ matrix.iflow_id }}" \
             --verbose true
 
