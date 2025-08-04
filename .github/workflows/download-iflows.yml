@@ -83,7 +83,7 @@ jobs:
             API_URL="${{ env.BASE_URL }}/api/v1/IntegrationPackages('$PACKAGE_ID')/IntegrationDesigntimeArtifacts"
             echo "Fetching iFlows from $API_URL"
 
-            HTTP_CODE=$(curl -s -w "%{\http_code}" -o response.json \
+            HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json \
               -H "Authorization: Bearer $ACCESS_TOKEN" \
               -H "Accept: application/json" \
               "$API_URL")
