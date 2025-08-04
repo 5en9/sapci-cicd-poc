@@ -43,7 +43,6 @@ jobs:
           step-name: integrationArtifactDownload
           flags:
             --apiServiceKey ${{ secrets.CPI_APISERVICEKEY_CREDENTIALS_ID }}
-            --apiServiceKey ${{ secrets[format('CI_APISERVICEKEY_{0}', env.TENANT_NAME)] }}
             --integrationFlowId ${{ github.event.inputs.iflow_id }}
             --integrationFlowVersion active
             --downloadPath iflows/${{ github.event.inputs.iflow_id }}

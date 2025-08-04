@@ -83,7 +83,7 @@ jobs:
             API_URL="${{ env.BASE_URL }}/api/v1/IntegrationPackages('$PACKAGE_ID')/IntegrationDesigntimeArtifacts"
             echo "Fetching iFlows from $API_URL"
 
-            HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json \
+            HTTP_CODE=$(curl -s -w "%{\http_code}" -o response.json \
               -H "Authorization: Bearer $ACCESS_TOKEN" \
               -H "Accept: application/json" \
               "$API_URL")
@@ -103,17 +103,64 @@ jobs:
           fi
 
   download_artifacts:
-    name: Download ${{ matrix.iflow_id }}
+    name: Download iFlows
     runs-on: ubuntu-latest
     needs: determine_iflows
-    strategy:
-      fail-fast: false
-      matrix:
-        iflow_id: ${{ fromJSON(needs.determine_iflows.outputs.iflows) }}
     steps:
-      - name: Download iFlow artifact
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up yq
         run: |
-          echo "Downloading artifact for iFlow: ${{ matrix.iflow_id }}"
-          # Placeholder for download logic.
-          # You would typically use a tool like `curl` or a dedicated action
-          # to download the iFlow artifact using the API and credentials.
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Download and Setup Piper
+        run: |
+          curl -L https://github.com/SAP/jenkins-library/releases/latest/download/piper -o piper
+          chmod +x piper
+          sudo mv piper /usr/local/bin/
+
+      - name: Download iFlow artifacts
+        run: |
+          if [ -z "${{ inputs.tenant }}" ]; then
+            TENANT=$(yq -r '.tenants[0]' config/deployment.yml)
+            echo "Tenant input not provided. Using first tenant from deployment.yml: $TENANT"
+          else
+            TENANT="${{ inputs.tenant }}"
+            echo "Using provided tenant: $TENANT"
+          fi
+
+          SECRET_NAME="CI_APISERVICEKEY_D_$TENANT"
+          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
+
+          if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
+            echo "Error: Secret $SECRET_NAME not found for tenant $TENANT."
+            exit 1
+          fi
+
+          for iflow_id in $(echo '${{ needs.determine_iflows.outputs.iflows }}' | jq -r '.[]'); do
+            echo "Downloading artifact for iFlow: $iflow_id"
+            
+            piper integrationArtifactDownload \
+              --apiServiceKey "$API_KEY_JSON" \
+              --integrationFlowId "$iflow_id" \
+              --downloadPath "iflows/$iflow_id"
+            
+            TARGET_DIR="iflows/$iflow_id"
+            ZIP_FILE="$TARGET_DIR/$iflow_id.zip"
+            
+            echo "Unzipping $ZIP_FILE to $TARGET_DIR"
+            unzip -o "$ZIP_FILE" -d "$TARGET_DIR"
+            rm "$ZIP_FILE"
+          done
+      - name: Create Branch
+        id: create_branch
+        run: |
+          git config --global user.email "actions@github.com"
+          git config --global user.name "GitHub Actions"
+          git checkout -b "sync/iflow-${{ inputs.iflow_id }}"
+          
+          git add .
+          git commit -m "feat: Sync iFlow ${{ inputs.iflow_id }}"
+          git push origin "sync/iflow-${{ inputs.iflow_id }}" --force
