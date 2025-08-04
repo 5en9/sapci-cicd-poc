@@ -90,7 +90,7 @@ jobs:
           echo "Access token obtained."
 
           echo "Checking if Integration Package '$PACKAGE_ID' exists..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{\http_code}" \
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')")
 
