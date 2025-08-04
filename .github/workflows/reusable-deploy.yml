@@ -30,7 +30,7 @@ jobs:
       - name: Get Secrets
         id: get_secrets
         run: |
-          echo "secrets=$(echo '${{ toJSON(secrets) }}' | jq 'del(.github_token)')" >> $GITHUB_OUTPUT
+          echo "secrets=$(echo '${{ toJSON(secrets) }}' | jq -c 'del(.github_token)')" >> $GITHUB_OUTPUT
 
   prepare_package:
     name: 📦 Prepare Integration Package for Tenant ${{ matrix.tenant }}
