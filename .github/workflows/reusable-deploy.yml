@@ -20,14 +20,26 @@ on:
         type: string
 
 jobs:
+  prep_environment:
+    name: Prepare environment for sub-sequence step
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    outputs:
+      secrets: ${{ steps.get_secrets.outputs.secrets }}
+    steps:
+      - name: Get Secrets
+        id: get_secrets
+        run: |
+          echo "secrets=${{ toJSON(secrets) }}" >> $GITHUB_OUTPUT     
+
   prepare_package:
     name: 📦 Prepare Integration Package for Tenant ${{ matrix.tenant }}
     runs-on: ubuntu-latest
+    needs: prep_environment
     strategy:
       fail-fast: false
       matrix:
         tenant: ${{ fromJSON(inputs.tenants) }}
-    environment: ${{ inputs.environment }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,7 +54,7 @@ jobs:
         run: |
           SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
+          API_KEY_JSON=$(echo '${{ needs.prep_environment.outputs.secrets }}' | jq -r ."$SECRET_NAME")
           echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
           if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
             echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
@@ -114,7 +126,7 @@ jobs:
 
   deploy:
     name: 🚀 Deploy ${{ matrix.iflow_id }} to ${{ matrix.tenant }}
-    needs: prepare_package
+    needs: [prep_environment, prepare_package]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -123,7 +135,6 @@ jobs:
         iflow_id: ${{ fromJSON(inputs.iflows) }}
     env:
       SECRETS_CONTEXT: ${{ toJSON(secrets) }}
-    environment: ${{ inputs.environment }}
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@v4
@@ -146,7 +157,7 @@ jobs:
         run: |
           SECRET_NAME="CI_APISERVICEKEY_${{ matrix.tenant }}"
           echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
+          API_KEY_JSON=$(echo '${{ needs.prep_environment.outputs.secrets }}' | jq -r ."$SECRET_NAME")
           echo "API_KEY=$API_KEY_JSON" >> $GITHUB_ENV # This line sets the API_KEY environment variable
 
       - name: Upload iFlow
