@@ -90,7 +90,7 @@ jobs:
           echo "Access token obtained."
 
           echo "Checking if Integration Package '$PACKAGE_ID' exists..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{\http_code}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')")
 
@@ -214,7 +214,7 @@ jobs:
                         PARAM_VALUE="$VALUE_CANDIDATE"
                         echo "  Found global value."
                     fi
-                fi
+                }
 
                 # 3. If not found, check for iflow default value
                 if [ -z "$PARAM_VALUE" ]; then
@@ -223,7 +223,7 @@ jobs:
                         PARAM_VALUE="$VALUE_CANDIDATE"
                         echo "  Found iFlow default value."
                     fi
-                fi
+                }
                 
                 # 3. If a value was found, update the configuration
                 if [ -n "$PARAM_VALUE" ]; then
@@ -264,3 +264,31 @@ jobs:
         run: |
           echo "Running automated tests for environment ${{ inputs.environment }}..."
           # Add your testing commands here
+
+  test:
+    name: Tenant ${{ matrix.tenant }}:Test ${{ matrix.iflow_id }}
+    if: contains(fromJSON(inputs.test_environments), inputs.environment)
+    needs: deploy
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        tenant: ${{ fromJSON(inputs.tenants) }}
+        iflow_id: ${{ fromJSON(inputs.iflows) }}
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+            name: iflow-artifact-${{ matrix.iflow_id }}
+
+      - name: Download and Setup cpilint
+        run: |
+          curl -sL "https://api.github.com/repos/mwittrock/cpilint/releases/latest" | grep "browser_download_url.*.zip" | cut -d '"' -f 4 | xargs curl -sL -o cpilint.zip
+          unzip cpilint.zip
+          CPILINT_DIR=$(unzip -qql cpilint.zip | head -n1 | tr -s ' ' | cut -d' ' -f5-)
+          chmod +x "${CPILINT_DIR}bin/cpilint"
+          sudo mv "${CPILINT_DIR}bin/cpilint" /usr/local/bin/
+
+      - name: Run cpilint
+        run: |
+          cpilint --rules-file config/cpilint.xml iflows/${{ matrix.iflow_id }}
