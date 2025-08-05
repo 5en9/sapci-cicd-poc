@@ -266,14 +266,13 @@ jobs:
           # Add your testing commands here
 
   test:
-    name: Tenant ${{ matrix.tenant }}:Test ${{ matrix.iflow_id }}
+    name: Test ${{ matrix.iflow_id }}
     if: contains(fromJSON(inputs.test_environments), inputs.environment)
     needs: deploy
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
-        tenant: ${{ fromJSON(inputs.tenants) }}
         iflow_id: ${{ fromJSON(inputs.iflows) }}
     steps:
       - name: Download Artifact
@@ -287,6 +286,6 @@ jobs:
           unzip cpilint.zip
           CPILINT_DIR=$(unzip -qql cpilint.zip | head -n1 | tr -s ' ' | cut -d' ' -f5-)
           chmod +x "${CPILINT_DIR}bin/cpilint"
-          ${CPILINT_DIR}bin/cpilint -rules config/cpilint.xml -directory iflows/${{ matrix.iflow_id }}
+          ${CPILINT_DIR}bin/cpilint -rules config/cpilint.xml -files ${{ matrix.iflow_id }}.zip
 
           
