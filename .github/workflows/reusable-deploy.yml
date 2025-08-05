@@ -287,8 +287,7 @@ jobs:
           unzip cpilint.zip
           CPILINT_DIR=$(unzip -qql cpilint.zip | head -n1 | tr -s ' ' | cut -d' ' -f5-)
           chmod +x "${CPILINT_DIR}bin/cpilint"
-          sudo mv "${CPILINT_DIR}bin/cpilint" /usr/local/bin/
 
       - name: Run cpilint
         run: |
-          cpilint --rules-file config/cpilint.xml iflows/${{ matrix.iflow_id }}
+          ${CPILINT_DIR}bin/cpilint -rules config/cpilint.xml -directory iflows/${{ matrix.iflow_id }}
