@@ -214,7 +214,6 @@ jobs:
                         PARAM_VALUE="$VALUE_CANDIDATE"
                         echo "  Found global value."
                     fi
-                }
 
                 # 3. If not found, check for default iflow value
                 if [ -z "$PARAM_VALUE" ]; then
@@ -222,8 +221,7 @@ jobs:
                     if [ -n "$VALUE_CANDIDATE" ]; then
                         PARAM_VALUE="$VALUE_CANDIDATE"
                         echo "  Found iFlow default value."
-                    fi
-                }                
+                    fi            
                 # 4. If a value was found, update the configuration
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME' and Value: '$PARAM_VALUE'"
