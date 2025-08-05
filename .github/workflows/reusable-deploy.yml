@@ -90,7 +90,7 @@ jobs:
           echo "Access token obtained."
 
           echo "Checking if Integration Package '$PACKAGE_ID' exists..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          HTTP_CODE=$(curl -s -o /dev/null -w "%\{http_code\}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')")
 
@@ -176,40 +176,45 @@ jobs:
           GLOBAL_CONFIG_FILE="config/parameters-${{ inputs.environment }}.prop"
           IFLOW_CONFIG_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters-${{ inputs.environment }}.prop"
 
-          # Function to read a property file, removing carriage returns
-          read_prop_file() {
-            if [ -f "$1" ]; then
-              # Use awk to handle line endings and read the file
-              awk '{ sub(/\r$/, ""); print }' "$1"
-            fi
-          }
-
           # Check if the definition file exists. If not, there are no parameters to configure.
           if [ ! -f "$PROPDEF_FILE" ]; then
             echo "Parameter definition file not found: $PROPDEF_FILE. Skipping configuration."
           else
             echo "Reading parameter definitions from $PROPDEF_FILE"
             
-            while IFS= read -r PARAM_NAME || [[ -n "$PARAM_NAME" ]]; do
+            # Correctly read parameter names from XML, handling potential CR characters
+            PARAMS=$(grep -oP '<name>\K[^<]+' "$PROPDEF_FILE" | tr -d '\r')
+
+            for PARAM_NAME in $PARAMS; do
                 echo "Processing parameter: '$PARAM_NAME'"
                 PARAM_VALUE=""
 
+                # Function to safely read property value
+                get_prop() {
+                    local file="$1"
+                    local key="$2"
+                    # Read file, remove CR, find key, and return value
+                    if [ -f "$file" ]; then
+                        grep -E "^${key}=" "$file" | tr -d '\r' | cut -d'=' -f2-
+                    fi
+                }
+
                 # 1. Check for iFlow-specific override
-                if [ -f "$IFLOW_CONFIG_FILE" ]; then
-                  VALUE_LINE=$(read_prop_file "$IFLOW_CONFIG_FILE" | grep "^${PARAM_NAME}=" || true)
-                  if [ -n "$VALUE_LINE" ]; then
-                    PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
+                VALUE_CANDIDATE=$(get_prop "$IFLOW_CONFIG_FILE" "$PARAM_NAME")
+                if [ -n "$VALUE_CANDIDATE" ]; then
+                    PARAM_VALUE="$VALUE_CANDIDATE"
                     echo "  Found iFlow-specific value."
-                  fi
                 fi
+
                 # 2. If not found, check for global value
-                if [ -z "$PARAM_VALUE" ] && [ -f "$GLOBAL_CONFIG_FILE" ]; then
-                  VALUE_LINE=$(read_prop_file "$GLOBAL_CONFIG_FILE" | grep "^${PARAM_NAME}=" || true)
-                  if [ -n "$VALUE_LINE" ]; then
-                    PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
-                    echo "  Found global value."
-                  fi
+                if [ -z "$PARAM_VALUE" ]; then
+                    VALUE_CANDIDATE=$(get_prop "$GLOBAL_CONFIG_FILE" "$PARAM_NAME")
+                    if [ -n "$VALUE_CANDIDATE" ]; then
+                        PARAM_VALUE="$VALUE_CANDIDATE"
+                        echo "  Found global value."
+                    fi
                 fi
+
                 # 3. If a value was found, update the configuration
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
@@ -235,7 +240,7 @@ jobs:
                 else
                   echo "  No value found for '$PARAM_NAME' in property files. Skipping."
                 fi
-            done < <(grep -oP '<name>\K[^<]+' "$PROPDEF_FILE")
+            done
           fi
           
           echo "Configuration updated. Now deploying the iFlow..."
