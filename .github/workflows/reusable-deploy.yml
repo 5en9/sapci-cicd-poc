@@ -214,15 +214,18 @@ jobs:
                         PARAM_VALUE="$VALUE_CANDIDATE"
                         echo "  Found global value."
                     fi
+                fi
 
-                # 3. If not found, check for default iflow value
+                # 3. If not found, check for iflow default value
                 if [ -z "$PARAM_VALUE" ]; then
                     VALUE_CANDIDATE=$(get_prop "$IFLOW_DEFAULT_CONFIG_FILE" "$PARAM_NAME")
                     if [ -n "$VALUE_CANDIDATE" ]; then
                         PARAM_VALUE="$VALUE_CANDIDATE"
                         echo "  Found iFlow default value."
-                    fi            
-                # 4. If a value was found, update the configuration
+                    fi
+                fi
+                
+                # 3. If a value was found, update the configuration
                 if [ -n "$PARAM_VALUE" ]; then
                   echo "  Attempting to update iFlow with Key: '$PARAM_NAME' and Value: '$PARAM_VALUE'"
                   output=$(piper integrationArtifactUpdateConfiguration \
