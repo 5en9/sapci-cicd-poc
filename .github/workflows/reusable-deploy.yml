@@ -184,6 +184,29 @@ jobs:
             
             # Correctly read parameter names from XML, handling potential CR characters
             PARAMS=$(grep -oP '<name>\K[^<]+' "$PROPDEF_FILE" | tr -d '\r')
+            echo "--- DEBUG: PARAMS ---"
+            echo "$PARAMS"
+            echo "--- END DEBUG ---
+
+            # --- DEBUG: Print file contents ---
+            echo "--- DEBUG: IFLOW_CONFIG_FILE path: $IFLOW_CONFIG_FILE"
+            if [ -f "$IFLOW_CONFIG_FILE" ]; then
+              echo "--- DEBUG: IFLOW_CONFIG_FILE content ---"
+              cat "$IFLOW_CONFIG_FILE"
+              echo "--- END DEBUG ---"
+            else
+              echo "--- DEBUG: IFLOW_CONFIG_FILE not found."
+            fi
+            
+            echo "--- DEBUG: GLOBAL_CONFIG_FILE path: $GLOBAL_CONFIG_FILE"
+            if [ -f "$GLOBAL_CONFIG_FILE" ]; then
+              echo "--- DEBUG: GLOBAL_CONFIG_FILE content ---"
+              cat "$GLOBAL_CONFIG_FILE"
+              echo "--- END DEBUG ---"
+            else
+              echo "--- DEBUG: GLOBAL_CONFIG_FILE not found."
+            fi
+            # --- END DEBUG ---
 
             for PARAM_NAME in $PARAMS; do
                 echo "Processing parameter: '$PARAM_NAME'"
@@ -201,6 +224,9 @@ jobs:
 
                 # 1. Check for iFlow-specific override
                 VALUE_CANDIDATE=$(get_prop "$IFLOW_CONFIG_FILE" "$PARAM_NAME")
+                echo "--- DEBUG: VALUE_CANDIDATE from iFlow file for $PARAM_NAME ---"
+                echo "$VALUE_CANDIDATE"
+                echo "--- END DEBUG ---"
                 if [ -n "$VALUE_CANDIDATE" ]; then
                     PARAM_VALUE="$VALUE_CANDIDATE"
                     echo "  Found iFlow-specific value."
@@ -209,6 +235,9 @@ jobs:
                 # 2. If not found, check for global value
                 if [ -z "$PARAM_VALUE" ]; then
                     VALUE_CANDIDATE=$(get_prop "$GLOBAL_CONFIG_FILE" "$PARAM_NAME")
+                    echo "--- DEBUG: VALUE_CANDIDATE from global file for $PARAM_NAME ---"
+                    echo "$VALUE_CANDIDATE"
+                    echo "--- END DEBUG ---"
                     if [ -n "$VALUE_CANDIDATE" ]; then
                         PARAM_VALUE="$VALUE_CANDIDATE"
                         echo "  Found global value."
@@ -217,7 +246,7 @@ jobs:
 
                 # 3. If a value was found, update the configuration
                 if [ -n "$PARAM_VALUE" ]; then
-                  echo "  Attempting to update iFlow with Key: '$PARAM_NAME'"
+                  echo "  Attempting to update iFlow with Key: '$PARAM_NAME' and Value: '$PARAM_VALUE'"
                   output=$(piper integrationArtifactUpdateConfiguration \
                       --apiServiceKey '${{ env.API_KEY_JSON }}' \
                       --integrationFlowId "${{ matrix.iflow_id }}" \
