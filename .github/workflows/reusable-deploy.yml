@@ -286,6 +286,6 @@ jobs:
           unzip cpilint.zip
           CPILINT_DIR=$(unzip -qql cpilint.zip | head -n1 | tr -s ' ' | cut -d' ' -f5-)
           chmod +x "${CPILINT_DIR}bin/cpilint"
-          ${CPILINT_DIR}bin/cpilint -rules config/cpilint.xml -files ${{ matrix.iflow_id }}.zip
+          ${CPILINT_DIR}bin/cpilint -rules config/cpilint.xml -unpacked-files iflows/${{ matrix.iflow_id }}
 
           
