@@ -281,13 +281,12 @@ jobs:
         with:
             name: iflow-artifact-${{ matrix.iflow_id }}
 
-      - name: Download and Setup cpilint
+      - name: Download, Setup and Run cpilint
         run: |
           curl -sL "https://api.github.com/repos/mwittrock/cpilint/releases/latest" | grep "browser_download_url.*.zip" | cut -d '"' -f 4 | xargs curl -sL -o cpilint.zip
           unzip cpilint.zip
           CPILINT_DIR=$(unzip -qql cpilint.zip | head -n1 | tr -s ' ' | cut -d' ' -f5-)
           chmod +x "${CPILINT_DIR}bin/cpilint"
-
-      - name: Run cpilint
-        run: |
           ${CPILINT_DIR}bin/cpilint -rules config/cpilint.xml -directory iflows/${{ matrix.iflow_id }}
+
+          
