@@ -223,8 +223,8 @@ jobs:
                       --integrationFlowId "${{ matrix.iflow_id }}" \
                       --integrationFlowVersion "active" \
                       --parameterKey "$PARAM_NAME" \
-                      --parameterValue @- \
-                      --verbose true 2>&1 <<< "$PARAM_VALUE")
+                      --parameterValue "$PARAM_VALUE" \
+                      --verbose true 2>&1)
                   exit_code=$?
 
                   echo "$output"
