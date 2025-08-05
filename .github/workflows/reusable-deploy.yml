@@ -90,7 +90,7 @@ jobs:
           echo "Access token obtained."
 
           echo "Checking if Integration Package '$PACKAGE_ID' exists..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{\http_code}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')")
 
@@ -176,6 +176,14 @@ jobs:
           GLOBAL_CONFIG_FILE="config/parameters-${{ inputs.environment }}.prop"
           IFLOW_CONFIG_FILE="iflows/${{ matrix.iflow_id }}/src/main/resources/parameters-${{ inputs.environment }}.prop"
 
+          # Function to read a property file, removing carriage returns
+          read_prop_file() {
+            if [ -f "$1" ]; then
+              # Use awk to handle line endings and read the file
+              awk '{ sub(/\r$/, ""); print }' "$1"
+            fi
+          }
+
           # Check if the definition file exists. If not, there are no parameters to configure.
           if [ ! -f "$PROPDEF_FILE" ]; then
             echo "Parameter definition file not found: $PROPDEF_FILE. Skipping configuration."
@@ -188,7 +196,7 @@ jobs:
 
                 # 1. Check for iFlow-specific override
                 if [ -f "$IFLOW_CONFIG_FILE" ]; then
-                  VALUE_LINE=$(grep "^${PARAM_NAME}=" "$IFLOW_CONFIG_FILE" || true)
+                  VALUE_LINE=$(read_prop_file "$IFLOW_CONFIG_FILE" | grep "^${PARAM_NAME}=" || true)
                   if [ -n "$VALUE_LINE" ]; then
                     PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
                     echo "  Found iFlow-specific value."
@@ -196,7 +204,7 @@ jobs:
                 fi
                 # 2. If not found, check for global value
                 if [ -z "$PARAM_VALUE" ] && [ -f "$GLOBAL_CONFIG_FILE" ]; then
-                  VALUE_LINE=$(grep "^${PARAM_NAME}=" "$GLOBAL_CONFIG_FILE" || true)
+                  VALUE_LINE=$(read_prop_file "$GLOBAL_CONFIG_FILE" | grep "^${PARAM_NAME}=" || true)
                   if [ -n "$VALUE_LINE" ]; then
                     PARAM_VALUE=$(echo "$VALUE_LINE" | cut -d'=' -f2-)
                     echo "  Found global value."
