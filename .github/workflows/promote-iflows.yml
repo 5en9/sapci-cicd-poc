@@ -2,13 +2,7 @@
 name: Promote iFlows
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      # Trigger on changes in any iFlow directory
-      - 'iflows/**'
-  workflow_dispatch: # Allows manual runs
+  workflow_call:
     inputs:
       iflow_id:
         description: 'Comma-separated list of iFlow IDs to deploy, or "all" to deploy all iFlows.'
@@ -22,6 +16,9 @@ on:
         description: 'Comma-separated list of environments to deploy to (e.g., D,Y). If not provided, will use config/deployment.yml.'
         required: false
         type: string
+    secrets:
+      API_KEYS_JSON:
+        required: true
 
 jobs:
   determine_changes:
@@ -36,9 +33,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          # Fetch all history for git diff
-          fetch-depth: 0
 
       - name: Set up yq
         run: |
@@ -48,21 +42,15 @@ jobs:
       - name: Identify changed iFlows
         id: get_changes
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then # Manual trigger logic
-            IFLOW_ID_INPUT="${{ github.event.inputs.iflow_id }}"
-            if [ "$IFLOW_ID_INPUT" == "all" ]; then
-              echo "Manual dispatch to deploy all iFlows."
-              # List all directories under iflows/, get their base name, and format as JSON
-              CHANGED_IFLOWS=$(ls -d iflows/*/ | xargs -n 1 basename | jq -R . | jq -sc .)
-            else
-              echo "Manual dispatch for specific iFlow(s): $IFLOW_ID_INPUT"
-              # Convert comma-separated string to a JSON array, removing whitespace
-              CHANGED_IFLOWS=$(echo "$IFLOW_ID_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc .)
-            fi
+          IFLOW_ID_INPUT="${{ inputs.iflow_id }}"
+          if [ "$IFLOW_ID_INPUT" == "all" ]; then
+            echo "Deploying all iFlows."
+            # List all directories under iflows/, get their base name, and format as JSON
+            CHANGED_IFLOWS=$(ls -d iflows/*/ | xargs -n 1 basename | jq -R . | jq -sc .)
           else
-            echo "Push event detected, determining changed iFlows."
-            # Get changed files between this and the previous commit, extract the iFlow directory, sort unique, and format as JSON
-            CHANGED_IFLOWS=$(git diff --name-only HEAD~1 HEAD | grep -oP 'iflows/\K[^/]+' | sort -u | jq -R . | jq -sc .)
+            echo "Deploying specific iFlow(s): $IFLOW_ID_INPUT"
+            # Convert comma-separated string to a JSON array, removing whitespace
+            CHANGED_IFLOWS=$(echo "$IFLOW_ID_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc .)
           fi
           echo "Detected iFlows for deployment: $CHANGED_IFLOWS"
           echo "iflows=$CHANGED_IFLOWS" >> $GITHUB_OUTPUT
@@ -70,8 +58,8 @@ jobs:
       - name: Determine tenants and environments for deployment
         id: get_config
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tenants }}" ]; then
-            TENANTS_INPUT="${{ github.event.inputs.tenants }}"
+          if [ -n "${{ inputs.tenants }}" ]; then
+            TENANTS_INPUT="${{ inputs.tenants }}"
             echo "Using tenants from workflow dispatch: $TENANTS_INPUT"
             TENANTS_JSON=$(echo "$TENANTS_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc . | tr '[:lower:]' '[:upper:]')
           elif [ -f "config/deployment.yml" ]; then
@@ -84,8 +72,8 @@ jobs:
           echo "Tenants for deployment (JSON): $TENANTS_JSON"
           echo "tenants=$TENANTS_JSON" >> $GITHUB_OUTPUT
 
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ github.event.inputs.environments }}" ]; then
-            ENVIRONMENTS_INPUT="${{ github.event.inputs.environments }}"
+          if [ -n "${{ inputs.environments }}" ]; then
+            ENVIRONMENTS_INPUT="${{ inputs.environments }}"
             echo "Using environments from workflow dispatch: $ENVIRONMENTS_INPUT"
             ENV_JSON=$(echo "$ENVIRONMENTS_INPUT" | sed 's/ //g' | tr ',' '\n' | jq -R . | jq -sc . | tr '[:lower:]' '[:upper:]')
           elif [ -f "config/deployment.yml" ]; then
@@ -144,7 +132,8 @@ jobs:
     needs: [determine_changes, build]
     if: ${{ needs.determine_changes.outputs.iflows != '[]' }}
     strategy:
-      fail-fast: false
+      max-parallel: 1
+      fail-fast: true
       matrix:
         environment: ${{ fromJSON(needs.determine_changes.outputs.environments) }}
     uses: ./.github/workflows/reusable-deploy.yml
@@ -154,4 +143,5 @@ jobs:
       tenants: ${{ needs.determine_changes.outputs.tenants }}
       environment: ${{ matrix.environment }}
       test_environments: ${{ needs.determine_changes.outputs.test_environments }}
-    secrets: inherit
+    secrets:
+      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}

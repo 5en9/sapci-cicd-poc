@@ -18,6 +18,9 @@ on:
       test_environments:
         required: true
         type: string
+    secrets:
+      API_KEYS_JSON:
+        required: true
 
 jobs:
   prep_environment:
@@ -48,15 +51,13 @@ jobs:
       - name: Set API Key and OAuth Details for Package Creation
         id: set_api_key_and_oauth_package
         run: |
-          # Get Secret base on environment and tenant. Secret is store on repository on the format CI_APISERVICEKEY_<environment>_<tenant>
+          # Get Secret base on environment and tenant.
           SECRET_NAME="CI_APISERVICEKEY_${{ inputs.environment }}_${{ matrix.tenant }}"
-          echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
-          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
+          API_KEY_JSON=$(echo '${{ secrets.API_KEYS_JSON }}' | jq -r ."$SECRET_NAME")
           if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
-            echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }}."
+            echo "Error: Secret $SECRET_NAME not found for tenant ${{ matrix.tenant }} in the provided JSON."
             exit 1
-          fi        
+          fi
           CLIENT_ID=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientid")
           CLIENT_SECRET=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientsecret")
           TOKEN_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.tokenurl")
@@ -90,7 +91,7 @@ jobs:
           echo "Access token obtained."
 
           echo "Checking if Integration Package '$PACKAGE_ID' exists..."
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{\http_code}" \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             "${{ env.BASE_URL }}/api/v1/IntegrationPackages(Id='$PACKAGE_ID')")
 
@@ -149,11 +150,9 @@ jobs:
       - name: Set API Key
         id: set_api_key
         run: |
-          # Get Secret base on environment and tenant. Secret is store on repository on the format CI_APISERVICEKEY_<environment>_<tenant>
+          # Get Secret base on environment and tenant.
           SECRET_NAME="CI_APISERVICEKEY_${{ inputs.environment }}_${{ matrix.tenant }}"
-          echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
-          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
+          API_KEY_JSON=$(echo '${{ secrets.API_KEYS_JSON }}' | jq -r ."$SECRET_NAME")
           echo "API_KEY_JSON=$API_KEY_JSON" >> $GITHUB_ENV # This line sets the API_KEY_JSON environment variable
 
       - name: Upload iFlow
@@ -287,5 +286,3 @@ jobs:
           CPILINT_DIR=$(unzip -qql cpilint.zip | head -n1 | tr -s ' ' | cut -d' ' -f5-)
           chmod +x "${CPILINT_DIR}bin/cpilint"
           ${CPILINT_DIR}bin/cpilint -rules config/cpilint.xml -unpacked-files iflows/${{ matrix.iflow_id }}
-
-          

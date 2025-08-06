@@ -1,0 +1,15 @@
+name: Call Reusable Workflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  call-workflow:
+    uses: your-username/sapci-cicd-poc/.github/workflows/download-iflows.yml@main
+    with:
+      iflow_id: 'all'
+      tenant: 'your-tenant'
+    secrets:
+      API_KEY_JSON: ${{ secrets.YOUR_SECRET_NAME }}

@@ -1,20 +1,24 @@
 name: Download iFlows
 
 on:
-  workflow_dispatch: # Allows manual runs
+  workflow_call:
     inputs:
       iflow_id:
         description: 'Comma-separated list of iFlow IDs to deploy, or "all" to download all iFlows.'
         required: true
         type: string
       tenant:
-        description: Tenant to download. If not provided, will use config/deployment.yml.'
+        description: 'Tenant to download. If not provided, will use config/deployment.yml.'
         required: false
         type: string
       branch_name:
         description: 'Optional: The name of the branch to create.'
         required: false
         type: string
+    secrets:
+      API_KEY_JSON:
+        description: 'The API service key JSON for the tenant.'
+        required: true
 
 jobs:
   determine_iflows:
@@ -34,22 +38,11 @@ jobs:
       - name: Set API Key and OAuth Details
         id: set_api_key_and_oauth
         run: |
-          if [ -z "${{ inputs.tenant }}" ]; then
-            TENANT=$(yq -r '.tenants[0]' config/deployment.yml)
-            echo "Tenant input not provided. Using first tenant from deployment.yml: $TENANT"
-          else
-            TENANT="${{ inputs.tenant }}"
-            echo "Using provided tenant: $TENANT"
-          fi
-          
-          SECRET_NAME="CI_APISERVICEKEY_D_$TENANT"
-          echo "Debugging: SECRET_NAME is $SECRET_NAME"
-          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
-          echo "Debugging: API_KEY_JSON is ::add-mask::$API_KEY_JSON"
+          API_KEY_JSON='${{ secrets.API_KEY_JSON }}'
           if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
-            echo "Error: Secret $SECRET_NAME not found for tenant $TENANT."
+            echo "Error: Secret API_KEY_JSON not provided."
             exit 1
-          fi        
+          fi
           CLIENT_ID=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientid")
           CLIENT_SECRET=$(echo "$API_KEY_JSON" | jq -r ".oauth.clientsecret")
           TOKEN_URL=$(echo "$API_KEY_JSON" | jq -r ".oauth.tokenurl")
@@ -87,7 +80,7 @@ jobs:
             API_URL="${{ env.BASE_URL }}/api/v1/IntegrationPackages('$PACKAGE_ID')/IntegrationDesigntimeArtifacts"
             echo "Fetching iFlows from $API_URL"
 
-            HTTP_CODE=$(curl -s -w "%{http_code}" -o response.json \
+            HTTP_CODE=$(curl -s -w "%{\http_code}" -o response.json \
               -H "Authorization: Bearer $ACCESS_TOKEN" \
               -H "Accept: application/json" \
               "$API_URL")
@@ -132,19 +125,9 @@ jobs:
             mkdir iflows
           fi
           
-          if [ -z "${{ inputs.tenant }}" ]; then
-            TENANT=$(yq -r '.tenants[0]' config/deployment.yml)
-            echo "Tenant input not provided. Using first tenant from deployment.yml: $TENANT"
-          else
-            TENANT="${{ inputs.tenant }}"
-            echo "Using provided tenant: $TENANT"
-          fi
-
-          SECRET_NAME="CI_APISERVICEKEY_D_$TENANT"
-          API_KEY_JSON=$(echo '${{ toJSON(secrets) }}' | jq -r ."$SECRET_NAME")
-
+          API_KEY_JSON='${{ secrets.API_KEY_JSON }}'
           if [ -z "$API_KEY_JSON" ] || [ "$API_KEY_JSON" == "null" ]; then
-            echo "Error: Secret $SECRET_NAME not found for tenant $TENANT."
+            echo "Error: Secret API_KEY_JSON not provided."
             exit 1
           fi
 
